@@ -3,12 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#18171e" />
   <title>Cube Timer</title>
-  <link rel="stylesheet" href="style.css?v=10" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2318171e'/%3E%3Crect x='6' y='6' width='8.5' height='8.5' rx='2' fill='%23e5463b'/%3E%3Crect x='17.5' y='6' width='8.5' height='8.5' rx='2' fill='%2318b45f'/%3E%3Crect x='6' y='17.5' width='8.5' height='8.5' rx='2' fill='%232b7fff'/%3E%3Crect x='17.5' y='17.5' width='8.5' height='8.5' rx='2' fill='%23ffd21a'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=11" />
 </head>
 <body>
   <!-- Options -->
-  <button class="settings-toggle" id="settings-toggle" type="button" aria-label="Options" title="Options">⚙</button>
+  <button class="settings-toggle" id="settings-toggle" type="button" aria-label="Options" title="Options">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
   <div class="settings-panel" id="settings-panel" hidden>
     <h2>Options</h2>
     <label class="opt">
@@ -41,7 +48,9 @@
       <div class="timer-wrap">
         <div class="timer" id="timer">0.00</div>
         <p class="hint" id="hint">Press and hold <kbd>Space</kbd> to get ready</p>
-        <button class="new-scramble" id="new-scramble" type="button" aria-label="New scramble" title="New scramble">↻</button>
+        <button class="new-scramble" id="new-scramble" type="button" aria-label="New scramble" title="New scramble">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      </button>
       </div>
     </main>
 
@@ -90,6 +99,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=10"></script>
+  <script src="script.js?v=11"></script>
 </body>
 </html>
