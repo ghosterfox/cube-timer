@@ -1,0 +1,148 @@
+:root {
+  --bg: #0f1115;
+  --bg-accent: #171a21;
+  --fg: #e8eaed;
+  --muted: #8b93a1;
+  --ready: #2ecc71;
+  --running: #e8eaed;
+  --border: #262b36;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  padding: 2rem 1.5rem;
+  position: relative;
+}
+
+/* Scramble */
+.scramble {
+  position: absolute;
+  top: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92vw, 900px);
+  text-align: center;
+  font-family: "SF Mono", "JetBrains Mono", ui-monospace, "Menlo", monospace;
+  font-size: clamp(1.1rem, 3.2vw, 1.9rem);
+  letter-spacing: 0.06em;
+  line-height: 1.7;
+  color: var(--fg);
+  word-spacing: 0.35em;
+}
+
+.scramble .move {
+  display: inline-block;
+}
+
+/* Timer */
+.timer-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: clamp(4rem, 22vw, 16rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  transition: color 0.08s ease, transform 0.08s ease;
+}
+
+.timer.ready {
+  color: var(--ready);
+  transform: scale(1.02);
+}
+
+.timer.running {
+  color: var(--running);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.95rem;
+  min-height: 1.2em;
+}
+
+kbd {
+  background: var(--bg-accent);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.1em 0.45em;
+  font-family: inherit;
+  font-size: 0.85em;
+}
+
+/* Stats */
+.stats {
+  display: flex;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.stat-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.stat-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+/* Button */
+.new-scramble {
+  background: var(--bg-accent);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.new-scramble:hover {
+  border-color: var(--muted);
+  background: #1d212a;
+}
+
+.new-scramble:active {
+  transform: translateY(1px);
+}

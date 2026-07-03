@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cube Timer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <section class="scramble" id="scramble" aria-label="Scramble"></section>
+
+    <div class="timer-wrap">
+      <div class="timer" id="timer">0.00</div>
+      <p class="hint" id="hint">Press and hold <kbd>Space</kbd> to get ready</p>
+    </div>
+
+    <section class="stats" id="stats">
+      <div class="stat">
+        <span class="stat-label">solves</span>
+        <span class="stat-value" id="stat-count">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">best</span>
+        <span class="stat-value" id="stat-best">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">ao5</span>
+        <span class="stat-value" id="stat-ao5">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">ao12</span>
+        <span class="stat-value" id="stat-ao12">—</span>
+      </div>
+    </section>
+
+    <button class="new-scramble" id="new-scramble" type="button">New scramble</button>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
