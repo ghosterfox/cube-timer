@@ -291,6 +291,12 @@ const settingsPanel = document.getElementById("settings-panel");
 const optHideUI = document.getElementById("opt-hide-ui");
 const optHideTimer = document.getElementById("opt-hide-timer");
 const puzzleSelect = document.getElementById("puzzle-select");
+const scrambleModal = document.getElementById("scramble-modal");
+const modalTitle = document.getElementById("modal-title");
+const modalScramble = document.getElementById("modal-scramble");
+const modalPreview = document.getElementById("modal-preview");
+const modalClose = document.getElementById("modal-close");
+const dockPreview = document.querySelector(".dock-preview");
 
 // ---------- State ----------
 // "idle"    -> waiting to start
@@ -371,19 +377,42 @@ function setPuzzle(id) {
 }
 
 // ---------- Scramble rendering ----------
-function newScramble() {
-  const { text, preview } = makeScramble(currentPuzzle);
-  currentScramble = text;
-  // Render scramble text (handles multi-line scrambles like Megaminx).
-  scrambleEl.innerHTML = text
+// Format scramble text as move spans (handles multi-line scrambles like Megaminx).
+function scrambleToHTML(text) {
+  return text
     .split("\n")
     .map((line) =>
       line.split(" ").map((m) => `<span class="move">${m}</span>`).join(" ")
     )
     .join("<br>");
+}
+
+// Cube net HTML for an arbitrary scramble under `puzzle`, or null for non-cubes.
+function previewForScramble(text, puzzle) {
+  if (puzzle.type !== "cube") return null;
+  const moves = text.split(/\s+/).filter(Boolean);
+  return renderPreview(cubeStateFromMoves(moves, puzzle.size), puzzle.size);
+}
+
+function newScramble() {
+  const { text, preview } = makeScramble(currentPuzzle);
+  currentScramble = text;
+  scrambleEl.innerHTML = scrambleToHTML(text);
   previewEl.innerHTML =
     preview ||
     `<div class="no-preview">No preview yet<span>${currentPuzzle.name} — scramble only</span></div>`;
+}
+
+// ---------- Scramble modal ----------
+function openScrambleModal(title, text) {
+  modalTitle.textContent = title;
+  modalScramble.innerHTML = scrambleToHTML(text);
+  modalPreview.innerHTML = previewForScramble(text, currentPuzzle) || "";
+  scrambleModal.hidden = false;
+}
+
+function closeScrambleModal() {
+  scrambleModal.hidden = true;
 }
 
 // ---------- Timer loop ----------
@@ -450,8 +479,10 @@ function fireConfetti() {
   ctx.scale(dpr, dpr);
 
   const colors = ["#d1332b", "#12a150", "#ffd21a", "#ff6a00", "#1466c4", "#2ecc71", "#f7f7f7"];
-  const cx = w / 2;
-  const cy = h * 0.42;
+  // Burst from the center of the timer.
+  const rect = timerEl.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
   const particles = [];
   for (let i = 0; i < 170; i++) {
     const angle = Math.random() * Math.PI * 2;
@@ -588,6 +619,15 @@ function renderSolveList() {
       time.style.color = "var(--ready)";
     }
 
+    // Clicking the number/time opens the solve's scramble.
+    const main = document.createElement("div");
+    main.className = "solve-main";
+    main.title = "View scramble";
+    main.append(num, time);
+    main.addEventListener("click", () =>
+      openScrambleModal(`Solve ${index + 1} — ${formatSolve(solve)}`, solve.scramble)
+    );
+
     const actions = document.createElement("div");
     actions.className = "solve-actions";
 
@@ -613,14 +653,20 @@ function renderSolveList() {
     del.addEventListener("click", () => deleteSolve(index));
 
     actions.append(plus2, dnf, del);
-    li.append(num, time, actions);
+    li.append(main, actions);
     solveListEl.prepend(li); // newest on top
   });
 }
 
 // ---------- Keyboard handling ----------
 document.addEventListener("keydown", (e) => {
+  // Escape closes the modal if it's open.
+  if (e.key === "Escape" && !scrambleModal.hidden) {
+    closeScrambleModal();
+    return;
+  }
   if (e.code !== "Space") return;
+  if (!scrambleModal.hidden) return; // don't arm the timer behind the modal
   e.preventDefault();
   if (e.repeat) return; // ignore auto-repeat while holding
 
@@ -649,6 +695,17 @@ document.addEventListener("keyup", (e) => {
 newScrambleBtn.addEventListener("click", () => {
   newScramble();
   newScrambleBtn.blur(); // keep Space bound to the timer, not the button
+});
+
+// Click the dock preview to enlarge the current scramble.
+dockPreview.addEventListener("click", () => {
+  openScrambleModal(`${currentPuzzle.name} scramble`, currentScramble);
+});
+
+// Modal close: X button, backdrop click.
+modalClose.addEventListener("click", closeScrambleModal);
+scrambleModal.addEventListener("click", (e) => {
+  if (e.target === scrambleModal) closeScrambleModal();
 });
 
 // Puzzle selector: populate and switch sessions.

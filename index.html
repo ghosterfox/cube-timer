@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cube Timer</title>
-  <link rel="stylesheet" href="style.css?v=9" />
+  <link rel="stylesheet" href="style.css?v=10" />
 </head>
 <body>
   <!-- Options -->
@@ -80,6 +80,16 @@
     </footer>
   </div>
 
-  <script src="script.js?v=9"></script>
+  <!-- Scramble / preview modal -->
+  <div class="modal-backdrop" id="scramble-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <button class="modal-close" id="modal-close" type="button" aria-label="Close">×</button>
+      <h3 class="modal-title" id="modal-title"></h3>
+      <div class="modal-scramble" id="modal-scramble"></div>
+      <div class="modal-preview" id="modal-preview"></div>
+    </div>
+  </div>
+
+  <script src="script.js?v=10"></script>
 </body>
 </html>
