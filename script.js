@@ -258,6 +258,34 @@ function formatAverage(value) {
   return formatTime(value);
 }
 
+// Parse a typed time into ms. Returns null if invalid.
+//  - With "." or ":" it's read literally: "34.15" -> 34.15s, "1:23.45" -> 83.45s
+//  - Pure digits fill from the right: last 2 = centiseconds, next 2 = seconds,
+//    the rest = minutes.  "316" -> 3.16, "3415" -> 34.15, "12345" -> 1:23.45
+function parseTimeInput(str) {
+  str = (str || "").trim();
+  if (!str) return null;
+
+  if (str.includes(":") || str.includes(".")) {
+    let minutes = 0;
+    let rest = str;
+    if (str.includes(":")) {
+      const [m, r] = str.split(":");
+      minutes = parseInt(m, 10) || 0;
+      rest = r;
+    }
+    const sec = parseFloat(rest);
+    if (isNaN(sec)) return null;
+    return Math.round((minutes * 60 + sec) * 1000);
+  }
+
+  if (!/^\d+$/.test(str)) return null;
+  const cs = parseInt(str.slice(-2) || "0", 10);
+  const sec = parseInt(str.slice(-4, -2) || "0", 10);
+  const min = parseInt(str.slice(0, -4) || "0", 10);
+  return (min * 60 + sec) * 1000 + cs * 10;
+}
+
 // ---------- Penalty helpers ----------
 // penalty: null | "+2" | "DNF"
 function effectiveTime(solve) {
@@ -295,6 +323,8 @@ const settingsToggle = document.getElementById("settings-toggle");
 const settingsPanel = document.getElementById("settings-panel");
 const optHideUI = document.getElementById("opt-hide-ui");
 const optHideTimer = document.getElementById("opt-hide-timer");
+const optManual = document.getElementById("opt-manual");
+const manualInput = document.getElementById("manual-input");
 const optShowAo50 = document.getElementById("opt-show-ao50");
 const optShowAo100 = document.getElementById("opt-show-ao100");
 const settingsClose = document.getElementById("settings-close");
@@ -322,7 +352,7 @@ let currentScramble = "";
 
 // ---------- Settings ----------
 const SETTINGS_KEY = "cube-timer-settings";
-const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showAo50: false, showAo100: false };
+const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showAo50: false, showAo100: false, manualEntry: false };
 let settings = loadSettings();
 
 function loadSettings() {
@@ -779,6 +809,9 @@ document.addEventListener("keydown", (e) => {
     if (!settingsPanel.hidden) { closeSettings(); return; }
   }
   if (e.code !== "Space") return;
+  if (settings.manualEntry) return; // manual entry uses the text box, not the timer
+  const active = document.activeElement;
+  if (active && /^(INPUT|SELECT|TEXTAREA)$/.test(active.tagName)) return;
   if (!scrambleModal.hidden || !settingsPanel.hidden) return; // don't arm behind a modal
   e.preventDefault();
   if (e.repeat) return; // ignore auto-repeat while holding
@@ -861,11 +894,46 @@ function closeSettings() {
   settingsPanel.hidden = true;
 }
 
+// Toggle manual time-entry mode.
+function applyManualMode() {
+  document.body.classList.toggle("manual", settings.manualEntry);
+  if (settings.manualEntry) {
+    timerEl.textContent = "0.00";
+    manualInput.value = "";
+    manualInput.focus();
+  }
+}
+
+// Live preview: show the parsed time in the big display as you type.
+manualInput.addEventListener("input", () => {
+  const ms = parseTimeInput(manualInput.value);
+  timerEl.textContent = ms == null ? "0.00" : formatTime(ms);
+});
+
+// Enter records the solve for the current scramble.
+manualInput.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  const ms = parseTimeInput(manualInput.value);
+  if (ms == null || ms <= 0) {
+    manualInput.classList.remove("shake");
+    void manualInput.offsetWidth; // restart animation
+    manualInput.classList.add("shake");
+    return;
+  }
+  recordSolve(ms);
+  newScramble();
+  manualInput.value = "";
+  timerEl.textContent = "0.00";
+  manualInput.focus();
+});
+
 optHideUI.checked = settings.hideUI;
 optHideTimer.checked = settings.hideTimer;
+optManual.checked = settings.manualEntry;
 optShowAo50.checked = settings.showAo50;
 optShowAo100.checked = settings.showAo100;
 applyStatCols();
+applyManualMode();
 
 settingsToggle.addEventListener("click", () => {
   settingsPanel.hidden = false;
@@ -885,6 +953,12 @@ optHideUI.addEventListener("change", () => {
 optHideTimer.addEventListener("change", () => {
   settings.hideTimer = optHideTimer.checked;
   saveSettings();
+});
+
+optManual.addEventListener("change", () => {
+  settings.manualEntry = optManual.checked;
+  saveSettings();
+  applyManualMode();
 });
 
 optShowAo50.addEventListener("change", () => {

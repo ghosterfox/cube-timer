@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#18171e" />
+  <title>Cube Timer · Stats</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2318171e'/%3E%3Crect x='6' y='6' width='8.5' height='8.5' rx='2' fill='%23e5463b'/%3E%3Crect x='17.5' y='6' width='8.5' height='8.5' rx='2' fill='%2318b45f'/%3E%3Crect x='6' y='17.5' width='8.5' height='8.5' rx='2' fill='%232b7fff'/%3E%3Crect x='17.5' y='17.5' width='8.5' height='8.5' rx='2' fill='%23ffd21a'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="stats.css?v=1" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="page-head">
+      <a class="back-link" href="index.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+        Timer
+      </a>
+      <h1>Statistics</h1>
+      <select class="head-select" id="puzzle-select" aria-label="Puzzle"></select>
+      <select class="head-select" id="session-select" aria-label="Session"></select>
+    </header>
+
+    <section class="kpis" id="kpis"></section>
+
+    <figure class="chart" id="prog-chart">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Progression</div>
+          <div class="chart-sub">Solve time over the session</div>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-key" style="background:var(--series-1)"></span>Solve</span>
+          <span class="legend-item"><span class="legend-key" style="background:var(--series-2)"></span>Trend (avg 12)</span>
+        </div>
+      </div>
+      <div class="plot" id="prog-plot"></div>
+    </figure>
+
+    <figure class="chart" id="dist-chart">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Distribution</div>
+          <div class="chart-sub">How many solves fall in each time range</div>
+        </div>
+      </div>
+      <div class="plot" id="dist-plot"></div>
+    </figure>
+  </div>
+
+  <script src="stats.js?v=1"></script>
+</body>
+</html>

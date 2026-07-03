@@ -75,11 +75,11 @@ body {
   stroke: currentColor;
 }
 
-/* ---------- Options menu ---------- */
-.settings-toggle {
+/* ---------- Top-right buttons ---------- */
+.settings-toggle,
+.stats-link {
   position: fixed;
   top: 1.25rem;
-  right: 1.25rem;
   width: 44px;
   height: 44px;
   background: var(--card);
@@ -92,7 +92,19 @@ body {
   justify-content: center;
   z-index: 40;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  transition: color 0.2s ease, border-color 0.2s ease, transform 0.5s ease, background 0.2s ease;
+  transition: color 0.2s ease, border-color 0.2s ease, transform 0.35s ease, background 0.2s ease;
+}
+
+.settings-toggle { right: 1.25rem; }
+.stats-link { right: 4.85rem; }
+
+.stats-link svg { width: 20px; height: 20px; stroke: currentColor; }
+
+.stats-link:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+  background: var(--card-2);
+  transform: translateY(-2px);
 }
 
 .settings-toggle:hover {
@@ -506,6 +518,66 @@ body {
   min-height: 1.2em;
 }
 
+/* Manual time entry */
+.manual-entry {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+body.manual .manual-entry {
+  display: flex;
+}
+
+body.manual .hint {
+  display: none;
+}
+
+.manual-input {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.08em;
+  width: 220px;
+  max-width: 70vw;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.6rem 1rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.manual-input::placeholder {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.manual-input:focus {
+  outline: none;
+  border-color: var(--ready);
+  box-shadow: 0 0 0 3px rgba(38, 211, 102, 0.2);
+}
+
+.manual-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.manual-input.shake {
+  animation: shake 0.32s ease;
+  border-color: var(--danger);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
 kbd {
   background: var(--card);
   border: 1px solid var(--border);
@@ -517,31 +589,33 @@ kbd {
   font-size: 0.82em;
 }
 
-/* New scramble icon button */
+/* New scramble icon button — bare icon, no chrome */
 .new-scramble {
-  background: var(--card);
+  background: none;
   color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  width: 46px;
-  height: 46px;
+  border: none;
+  box-shadow: none;
+  width: 32px;
+  height: 32px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  transition: border-color 0.18s ease, color 0.18s ease, transform 0.5s var(--bounce), background 0.18s ease;
+  transition: color 0.18s ease, transform 0.5s var(--bounce);
+}
+
+.new-scramble svg {
+  width: 16px;
+  height: 16px;
 }
 
 .new-scramble:hover {
-  border-color: var(--border-strong);
   color: var(--fg);
-  background: var(--card-2);
   transform: rotate(-180deg);
 }
 
 .new-scramble:active {
-  transform: rotate(-180deg) scale(0.94);
+  transform: rotate(-180deg) scale(0.9);
 }
 
 /* ---------- Bottom dock ---------- */
@@ -821,6 +895,7 @@ body.solving .puzzle-select,
 body.solving .new-scramble,
 body.solving .hint,
 body.solving .settings-toggle,
+body.solving .stats-link,
 body.solving .settings-modal {
   display: none;
 }
