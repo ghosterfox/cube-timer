@@ -423,9 +423,78 @@ function stopTimer() {
 
 // ---------- Solves ----------
 function recordSolve(ms) {
+  // Best among prior (non-DNF) solves, to detect a new PB.
+  const prior = solves.filter((s) => s.penalty !== "DNF").map(effectiveTime);
+  const prevBest = prior.length ? Math.min(...prior) : Infinity;
+  const hadPrior = solves.length > 0;
+
   solves.push({ time: ms, penalty: null, scramble: currentScramble, date: new Date().toISOString() });
   saveSolves();
   render();
+
+  // Celebrate beating a previous personal best (not the very first solve).
+  if (hadPrior && ms < prevBest) fireConfetti();
+}
+
+// ---------- Confetti (self-contained canvas burst) ----------
+function fireConfetti() {
+  const canvas = document.createElement("canvas");
+  canvas.className = "confetti-canvas";
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+
+  const colors = ["#d1332b", "#12a150", "#ffd21a", "#ff6a00", "#1466c4", "#2ecc71", "#f7f7f7"];
+  const cx = w / 2;
+  const cy = h * 0.42;
+  const particles = [];
+  for (let i = 0; i < 170; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 4 + Math.random() * 10;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 5, // bias the burst upward
+      size: 5 + Math.random() * 6,
+      color: colors[(Math.random() * colors.length) | 0],
+      rot: Math.random() * Math.PI,
+      vrot: (Math.random() - 0.5) * 0.3,
+      life: 0,
+      ttl: 90 + Math.random() * 45,
+    });
+  }
+
+  const gravity = 0.16;
+  const drag = 0.99;
+  function frame() {
+    ctx.clearRect(0, 0, w, h);
+    let alive = false;
+    for (const p of particles) {
+      if (p.life > p.ttl) continue;
+      alive = true;
+      p.life++;
+      p.vx *= drag;
+      p.vy = p.vy * drag + gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vrot;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, 1 - p.life / p.ttl);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.62);
+      ctx.restore();
+    }
+    if (alive) requestAnimationFrame(frame);
+    else canvas.remove();
+  }
+  frame();
 }
 
 function deleteSolve(index) {

@@ -287,19 +287,40 @@ body {
   position: absolute;
   top: 1.25rem;
   left: 1.25rem;
-  background: var(--bg-accent);
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg-accent);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.9rem;
+  border-radius: 10px;
+  padding: 0.55rem 2.1rem 0.55rem 0.95rem;
+  font-size: 0.92rem;
+  font-weight: 600;
   font-family: inherit;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%238b93a1' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M1 1.75 6 6.25 11 1.75'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center;
+  background-size: 0.72rem;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .puzzle-select:hover {
   border-color: var(--muted);
+  background-color: #1d212a;
+}
+
+.puzzle-select:focus-visible {
+  outline: none;
+  border-color: var(--ready);
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.18);
+}
+
+.puzzle-select option {
+  background: var(--bg-accent);
+  color: var(--fg);
+  font-weight: 500;
 }
 
 /* Scramble */
@@ -516,6 +537,16 @@ kbd {
 .stat-pb .stat-value {
   font-size: clamp(2rem, 4vw, 3.2rem);
   color: var(--ready);
+}
+
+/* ---------- Confetti (new PB celebration) ---------- */
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 100;
 }
 
 /* ---------- Focus mode (hide interface while solving) ---------- */
