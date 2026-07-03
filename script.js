@@ -295,9 +295,14 @@ const settingsToggle = document.getElementById("settings-toggle");
 const settingsPanel = document.getElementById("settings-panel");
 const optHideUI = document.getElementById("opt-hide-ui");
 const optHideTimer = document.getElementById("opt-hide-timer");
-const optShowBig = document.getElementById("opt-show-big");
+const optShowAo50 = document.getElementById("opt-show-ao50");
+const optShowAo100 = document.getElementById("opt-show-ao100");
 const settingsClose = document.getElementById("settings-close");
 const puzzleSelect = document.getElementById("puzzle-select");
+const sessionSelect = document.getElementById("session-select");
+const sessionNewBtn = document.getElementById("session-new");
+const sessionRenameBtn = document.getElementById("session-rename");
+const sessionDeleteBtn = document.getElementById("session-delete");
 const scrambleModal = document.getElementById("scramble-modal");
 const modalTitle = document.getElementById("modal-title");
 const modalScramble = document.getElementById("modal-scramble");
@@ -317,13 +322,16 @@ let currentScramble = "";
 
 // ---------- Settings ----------
 const SETTINGS_KEY = "cube-timer-settings";
-const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showBig: false };
+const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showAo50: false, showAo100: false };
 let settings = loadSettings();
 
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS };
+    const parsed = raw ? JSON.parse(raw) : {};
+    // Migrate the old combined "showBig" toggle to the two separate ones.
+    if (parsed.showBig) { parsed.showAo50 = true; parsed.showAo100 = true; }
+    return { ...DEFAULT_SETTINGS, ...parsed };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -337,30 +345,65 @@ function saveSettings() {
   }
 }
 
-// ---------- Sessions (one per puzzle) ----------
-// Storage shape: { [puzzleId]: [ { time, penalty, scramble, date }, ... ] }
+// ---------- Sessions (multiple named sessions per puzzle) ----------
+// Storage shape: { [puzzleId]: { active: sessionId, list: [ { id, name, solves } ] } }
 const STORAGE_KEY = "cube-timer-sessions";
 const PUZZLE_KEY = "cube-timer-puzzle";
-let allSessions = loadSessions();
+let allData = loadData();
 let currentPuzzle = loadCurrentPuzzle();
-let solves = allSessions[currentPuzzle.id] || (allSessions[currentPuzzle.id] = []);
+let solves = []; // points at the current session's solves array
+syncSolves();
 
-function loadSessions() {
+function loadData() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    // Migrate the old one-session-per-puzzle shape ({ puzzleId: [solves] }).
+    for (const pid of Object.keys(data)) {
+      if (Array.isArray(data[pid])) {
+        data[pid] = { active: "s1", list: [{ id: "s1", name: "Session 1", solves: data[pid] }] };
+      }
+    }
+    return data;
   } catch {
     return {};
   }
 }
 
-function saveSolves() {
-  allSessions[currentPuzzle.id] = solves;
+function saveData() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(allSessions));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(allData));
   } catch {
     /* storage unavailable — session-only history */
   }
+}
+
+function newSessionId() {
+  return "s" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+}
+
+// The session container for a puzzle, creating a default session if needed.
+function puzzleData(pid) {
+  if (!allData[pid] || !allData[pid].list || allData[pid].list.length === 0) {
+    allData[pid] = { active: "s1", list: [{ id: "s1", name: "Session 1", solves: [] }] };
+  }
+  return allData[pid];
+}
+
+function currentSession() {
+  const pd = puzzleData(currentPuzzle.id);
+  let s = pd.list.find((x) => x.id === pd.active);
+  if (!s) { s = pd.list[0]; pd.active = s.id; }
+  return s;
+}
+
+// Point `solves` at the active session's array.
+function syncSolves() {
+  solves = currentSession().solves;
+}
+
+function saveSolves() {
+  currentSession().solves = solves; // re-sync in case the ref was replaced
+  saveData();
 }
 
 function loadCurrentPuzzle() {
@@ -378,8 +421,67 @@ function setPuzzle(id) {
   if (!puzzle || puzzle.id === currentPuzzle.id) return;
   currentPuzzle = puzzle;
   try { localStorage.setItem(PUZZLE_KEY, id); } catch { /* ignore */ }
-  solves = allSessions[id] || (allSessions[id] = []);
+  syncSolves();
+  renderSessions();
   newScramble();
+  render();
+}
+
+// ---------- Session management ----------
+function renderSessions() {
+  const pd = puzzleData(currentPuzzle.id);
+  sessionSelect.innerHTML = "";
+  for (const s of pd.list) {
+    const opt = document.createElement("option");
+    opt.value = s.id;
+    opt.textContent = s.name;
+    sessionSelect.appendChild(opt);
+  }
+  sessionSelect.value = pd.active;
+  sessionDeleteBtn.disabled = pd.list.length <= 1;
+}
+
+function switchSession(id) {
+  const pd = puzzleData(currentPuzzle.id);
+  if (!pd.list.some((s) => s.id === id)) return;
+  pd.active = id;
+  saveData();
+  syncSolves();
+  render();
+}
+
+function createSession() {
+  const pd = puzzleData(currentPuzzle.id);
+  const name = (prompt("Name for the new session:", `Session ${pd.list.length + 1}`) || "").trim();
+  if (!name) return;
+  const id = newSessionId();
+  pd.list.push({ id, name, solves: [] });
+  pd.active = id;
+  saveData();
+  syncSolves();
+  renderSessions();
+  render();
+}
+
+function renameSession() {
+  const s = currentSession();
+  const name = (prompt("Rename session:", s.name) || "").trim();
+  if (!name) return;
+  s.name = name;
+  saveData();
+  renderSessions();
+}
+
+function deleteSession() {
+  const pd = puzzleData(currentPuzzle.id);
+  if (pd.list.length <= 1) return;
+  const s = currentSession();
+  if (!confirm(`Delete session "${s.name}" and all its solves?`)) return;
+  pd.list = pd.list.filter((x) => x.id !== pd.active);
+  pd.active = pd.list[0].id;
+  saveData();
+  syncSolves();
+  renderSessions();
   render();
 }
 
@@ -737,9 +839,22 @@ clearAllBtn.addEventListener("click", () => {
   clearAllBtn.blur();
 });
 
+// Session controls
+sessionSelect.addEventListener("change", () => {
+  switchSession(sessionSelect.value);
+  sessionSelect.blur();
+});
+sessionNewBtn.addEventListener("click", () => { createSession(); sessionNewBtn.blur(); });
+sessionRenameBtn.addEventListener("click", () => { renameSession(); sessionRenameBtn.blur(); });
+sessionDeleteBtn.addEventListener("click", () => { deleteSession(); sessionDeleteBtn.blur(); });
+
 // ---------- Options menu (modal) ----------
-function applyShowBig() {
-  statGrid.classList.toggle("extended", settings.showBig);
+// Show/hide the Ao50 and Ao100 cards independently, and size the grid to fit.
+function applyStatCols() {
+  statGrid.classList.toggle("show-ao50", settings.showAo50);
+  statGrid.classList.toggle("show-ao100", settings.showAo100);
+  const cols = 2 + (settings.showAo50 ? 1 : 0) + (settings.showAo100 ? 1 : 0);
+  statGrid.dataset.cols = String(cols);
 }
 
 function closeSettings() {
@@ -748,8 +863,9 @@ function closeSettings() {
 
 optHideUI.checked = settings.hideUI;
 optHideTimer.checked = settings.hideTimer;
-optShowBig.checked = settings.showBig;
-applyShowBig();
+optShowAo50.checked = settings.showAo50;
+optShowAo100.checked = settings.showAo100;
+applyStatCols();
 
 settingsToggle.addEventListener("click", () => {
   settingsPanel.hidden = false;
@@ -771,12 +887,19 @@ optHideTimer.addEventListener("change", () => {
   saveSettings();
 });
 
-optShowBig.addEventListener("change", () => {
-  settings.showBig = optShowBig.checked;
+optShowAo50.addEventListener("change", () => {
+  settings.showAo50 = optShowAo50.checked;
   saveSettings();
-  applyShowBig();
+  applyStatCols();
+});
+
+optShowAo100.addEventListener("change", () => {
+  settings.showAo100 = optShowAo100.checked;
+  saveSettings();
+  applyStatCols();
 });
 
 // ---------- Init ----------
+renderSessions();
 newScramble();
 render();
