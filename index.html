@@ -4,39 +4,82 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cube Timer</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=8" />
 </head>
 <body>
-  <main class="app">
-    <section class="scramble" id="scramble" aria-label="Scramble"></section>
+  <!-- Options -->
+  <button class="settings-toggle" id="settings-toggle" type="button" aria-label="Options" title="Options">⚙</button>
+  <div class="settings-panel" id="settings-panel" hidden>
+    <h2>Options</h2>
+    <label class="opt">
+      <span>Hide interface during solve</span>
+      <input type="checkbox" id="opt-hide-ui" />
+      <span class="switch"></span>
+    </label>
+    <label class="opt">
+      <span>Hide timer during solve</span>
+      <input type="checkbox" id="opt-hide-timer" />
+      <span class="switch"></span>
+    </label>
+  </div>
 
-    <div class="timer-wrap">
-      <div class="timer" id="timer">0.00</div>
-      <p class="hint" id="hint">Press and hold <kbd>Space</kbd> to get ready</p>
+  <!-- Left sidebar: solves -->
+  <aside class="sidebar" id="sidebar" aria-label="Solve history">
+    <div class="sidebar-header">
+      <h2>Solves <span class="sidebar-count" id="sidebar-count">0</span></h2>
+      <button class="clear-all" id="clear-all" type="button">Clear</button>
     </div>
+    <ul class="solve-list" id="solve-list"></ul>
+    <p class="solve-empty" id="solve-empty">No solves yet</p>
+  </aside>
 
-    <section class="stats" id="stats">
-      <div class="stat">
-        <span class="stat-label">solves</span>
-        <span class="stat-value" id="stat-count">0</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">best</span>
-        <span class="stat-value" id="stat-best">—</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">ao5</span>
-        <span class="stat-value" id="stat-ao5">—</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">ao12</span>
-        <span class="stat-value" id="stat-ao12">—</span>
-      </div>
-    </section>
+  <div class="main-col">
+    <main class="app">
+      <select class="puzzle-select" id="puzzle-select" aria-label="Puzzle"></select>
+      <section class="scramble" id="scramble" aria-label="Scramble"></section>
 
-    <button class="new-scramble" id="new-scramble" type="button">New scramble</button>
-  </main>
+      <div class="timer-wrap">
+        <div class="timer" id="timer">0.00</div>
+        <p class="hint" id="hint">Press and hold <kbd>Space</kbd> to get ready</p>
+        <button class="new-scramble" id="new-scramble" type="button" aria-label="New scramble" title="New scramble">↻</button>
+      </div>
+    </main>
 
-  <script src="script.js"></script>
+    <!-- Bottom dock -->
+    <footer class="dock">
+      <!-- Section 1: cube preview -->
+      <section class="dock-preview" aria-label="Scramble preview">
+        <div class="preview-inner" id="preview"></div>
+      </section>
+
+      <!-- Section 2: stats -->
+      <section class="dock-stats" aria-label="Statistics">
+        <div class="stat stat-pb">
+          <span class="stat-label">PB</span>
+          <span class="stat-value" id="stat-best">—</span>
+        </div>
+        <div class="stat-grid">
+          <div class="stat">
+            <span class="stat-label">ao5</span>
+            <span class="stat-value" id="stat-ao5">—</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">ao12</span>
+            <span class="stat-value" id="stat-ao12">—</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">PB ao5</span>
+            <span class="stat-value" id="stat-pb-ao5">—</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">PB ao12</span>
+            <span class="stat-value" id="stat-pb-ao12">—</span>
+          </div>
+        </div>
+      </section>
+    </footer>
+  </div>
+
+  <script src="script.js?v=8"></script>
 </body>
 </html>

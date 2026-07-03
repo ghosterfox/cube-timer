@@ -1,42 +1,242 @@
-// ---------- WCA-compliant 3x3 scramble generator ----------
-// Uses a random-move generator with WCA-standard constraints:
-//  - 20 moves (standard 3x3 scramble length)
-//  - no two consecutive moves on the same face
-//  - no move on a face when the two previous moves were on the same axis
-//    (prevents redundant U D U / R L R sequences)
-const FACES = ["U", "D", "L", "R", "F", "B"];
-const MODIFIERS = ["", "'", "2"]; // clockwise, counter-clockwise, double
-const AXIS = { U: 0, D: 0, L: 1, R: 1, F: 2, B: 2 };
-const SCRAMBLE_LENGTH = 20;
+// ---------- Puzzle definitions ----------
+const PUZZLES = [
+  { id: "222", name: "2x2", type: "cube", size: 2 },
+  { id: "333", name: "3x3", type: "cube", size: 3 },
+  { id: "444", name: "4x4", type: "cube", size: 4 },
+  { id: "555", name: "5x5", type: "cube", size: 5 },
+  { id: "666", name: "6x6", type: "cube", size: 6 },
+  { id: "777", name: "7x7", type: "cube", size: 7 },
+  { id: "pyram", name: "Pyraminx", type: "pyraminx" },
+  { id: "skewb", name: "Skewb", type: "skewb" },
+  { id: "mega", name: "Megaminx", type: "megaminx" },
+  { id: "sq1", name: "Square-1", type: "sq1" },
+];
 
-function generateScramble() {
-  const moves = [];
-  let prevFace = null;
-  let prevPrevFace = null;
+const randInt = (n) => Math.floor(Math.random() * n);
+const pick = (arr) => arr[randInt(arr.length)];
 
-  while (moves.length < SCRAMBLE_LENGTH) {
-    const face = FACES[Math.floor(Math.random() * FACES.length)];
+// ---------- NxN cube engine ----------
+// State: flat array of 6*n*n face letters, faces ordered U,R,F,D,L,B, each n*n
+// row-major. Verified in Python against the trusted 3x3 engine (3000 random
+// scrambles match exactly) plus move^4=I / scramble*inverse / sexy^6 for n=2..7.
+const CUBE_COLORS = {
+  U: "#f7f7f7", R: "#d1332b", F: "#12a150",
+  D: "#ffd21a", L: "#ff6a00", B: "#1466c4",
+};
 
-    // Skip same face as the immediately previous move.
-    if (face === prevFace) continue;
+// For a clockwise turn of `face`, the 4 adjacent strip cells (in content-cycle
+// order) at depth d, position c, on an n-cube. Returns [faceLetter, localIndex].
+const STRIPS = {
+  U: (d, c, n) => [["B", d * n + c], ["R", d * n + c], ["F", d * n + c], ["L", d * n + c]],
+  D: (d, c, n) => { const r = n - 1 - d; return [["F", r * n + c], ["R", r * n + c], ["B", r * n + c], ["L", r * n + c]]; },
+  R: (d, c, n) => [["U", c * n + (n - 1 - d)], ["B", (n - 1 - c) * n + d], ["D", c * n + (n - 1 - d)], ["F", c * n + (n - 1 - d)]],
+  L: (d, c, n) => [["U", c * n + d], ["F", c * n + d], ["D", c * n + d], ["B", (n - 1 - c) * n + (n - 1 - d)]],
+  F: (d, c, n) => [["U", (n - 1 - d) * n + c], ["R", c * n + d], ["D", d * n + (n - 1 - c)], ["L", (n - 1 - c) * n + (n - 1 - d)]],
+  B: (d, c, n) => [["U", d * n + c], ["L", (n - 1 - c) * n + d], ["D", (n - 1 - d) * n + (n - 1 - c)], ["R", c * n + (n - 1 - d)]],
+};
 
-    // Skip if the last two moves were on the same axis as this one.
-    if (
-      prevFace !== null &&
-      prevPrevFace !== null &&
-      AXIS[face] === AXIS[prevFace] &&
-      AXIS[face] === AXIS[prevPrevFace]
-    ) {
-      continue;
+function faceStarts(n) {
+  const per = n * n;
+  return { U: 0, R: per, F: 2 * per, D: 3 * per, L: 4 * per, B: 5 * per };
+}
+
+function solvedCube(n) {
+  const per = n * n;
+  const order = "URFDLB";
+  return Array.from({ length: 6 * per }, (_, i) => order[Math.floor(i / per)]);
+}
+
+// Clockwise turn of `width` layers on `face`.
+function applyCWLayers(state, face, width, n) {
+  const start = faceStarts(n);
+  const next = state.slice();
+  // Rotate the outer face itself CW.
+  const s = start[face];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      next[s + c * n + (n - 1 - r)] = state[s + r * n + c];
     }
-
-    const modifier = MODIFIERS[Math.floor(Math.random() * MODIFIERS.length)];
-    moves.push(face + modifier);
-    prevPrevFace = prevFace;
-    prevFace = face;
   }
+  // Cycle the adjacent strips for each affected layer.
+  for (let d = 0; d < width; d++) {
+    for (let c = 0; c < n; c++) {
+      const cells = STRIPS[face](d, c, n);
+      for (let i = 0; i < 4; i++) {
+        const [ft, it] = cells[(i + 1) % 4];
+        const [ff, iff] = cells[i];
+        next[start[ft] + it] = state[start[ff] + iff];
+      }
+    }
+  }
+  return next;
+}
 
+// Parse notation like "R", "R'", "Rw2", "3Rw'".
+function parseCubeMove(mv) {
+  let i = 0;
+  let widthNum = null;
+  if (mv[0] >= "0" && mv[0] <= "9") { widthNum = parseInt(mv[0], 10); i = 1; }
+  const face = mv[i]; i++;
+  let wide = false;
+  if (mv[i] === "w") { wide = true; i++; }
+  const mod = mv.slice(i);
+  const width = wide ? widthNum || 2 : 1;
+  const count = mod === "'" ? 3 : mod === "2" ? 2 : 1;
+  return { face, width, count };
+}
+
+function cubeStateFromMoves(moves, n) {
+  let state = solvedCube(n);
+  for (const mv of moves) {
+    const { face, width, count } = parseCubeMove(mv);
+    for (let k = 0; k < count; k++) state = applyCWLayers(state, face, width, n);
+  }
+  return state;
+}
+
+// ---------- Scramble generators ----------
+const CUBE_LEN = { 2: 11, 3: 20, 4: 40, 5: 60, 6: 80, 7: 100 };
+
+// 3x3 uses the WCA-standard constrained generator (no same face twice, no move
+// on a face when the previous two were on the same axis).
+function scramble333() {
+  const faces = ["U", "D", "L", "R", "F", "B"];
+  const axis = { U: 0, D: 0, L: 1, R: 1, F: 2, B: 2 };
+  const mods = ["", "'", "2"];
+  const moves = [];
+  let prev = null, prevPrev = null;
+  while (moves.length < CUBE_LEN[3]) {
+    const f = pick(faces);
+    if (f === prev) continue;
+    if (prev && prevPrev && axis[f] === axis[prev] && axis[f] === axis[prevPrev]) continue;
+    moves.push(f + pick(mods));
+    prevPrev = prev; prev = f;
+  }
   return moves;
+}
+
+function notateWide(face, width, mod) {
+  if (width === 1) return face + mod;
+  if (width === 2) return face + "w" + mod;
+  return width + face + "w" + mod;
+}
+
+// NxN random-move scramble with wide turns (no same face consecutively).
+function scrambleNxN(n) {
+  if (n === 3) return scramble333();
+  const faces = n === 2 ? ["R", "U", "F"] : ["U", "L", "F", "R", "B", "D"];
+  const mods = ["", "'", "2"];
+  const maxWidth = Math.max(1, Math.floor(n / 2));
+  const moves = [];
+  let prev = null;
+  while (moves.length < CUBE_LEN[n]) {
+    const f = pick(faces);
+    if (f === prev) continue;
+    prev = f;
+    const width = n === 2 ? 1 : 1 + randInt(maxWidth);
+    moves.push(notateWide(f, width, pick(mods)));
+  }
+  return moves;
+}
+
+// Pyraminx: up to 11 face turns (U L R B, ± only) then optional tips (u l r b).
+function scramblePyraminx() {
+  const faces = ["U", "L", "R", "B"];
+  const moves = [];
+  let prev = null;
+  while (moves.length < 10) {
+    const f = pick(faces);
+    if (f === prev) continue;
+    prev = f;
+    moves.push(f + pick(["", "'"]));
+  }
+  for (const tip of ["u", "l", "r", "b"]) {
+    const r = randInt(3); // 0 = skip
+    if (r === 1) moves.push(tip);
+    else if (r === 2) moves.push(tip + "'");
+  }
+  return moves.join(" ");
+}
+
+// Skewb: 11 axis turns (U L R B, ± only), no same face consecutively.
+function scrambleSkewb() {
+  const faces = ["U", "L", "R", "B"];
+  const moves = [];
+  let prev = null;
+  while (moves.length < 11) {
+    const f = pick(faces);
+    if (f === prev) continue;
+    prev = f;
+    moves.push(f + pick(["", "'"]));
+  }
+  return moves.join(" ");
+}
+
+// Megaminx: WCA fixed format — 7 lines of (R±± D±±)x5 then U/U'.
+function scrambleMegaminx() {
+  const lines = [];
+  for (let l = 0; l < 7; l++) {
+    const parts = [];
+    for (let i = 0; i < 5; i++) {
+      parts.push("R" + (randInt(2) ? "++" : "--"));
+      parts.push("D" + (randInt(2) ? "++" : "--"));
+    }
+    parts.push(randInt(2) ? "U" : "U'");
+    lines.push(parts.join(" "));
+  }
+  return lines.join("\n");
+}
+
+// Square-1: sequence of (top, bottom) twists separated by slices.
+function scrambleSquare1() {
+  const twists = [];
+  for (let i = 0; i < 11; i++) {
+    let a, b;
+    do { a = randInt(12) - 5; b = randInt(12) - 5; } while (a === 0 && b === 0);
+    twists.push(`(${a},${b})`);
+  }
+  return twists.join(" / ");
+}
+
+// Build a scramble (and preview HTML) for a given puzzle.
+function makeScramble(puzzle) {
+  if (puzzle.type === "cube") {
+    const moves = scrambleNxN(puzzle.size);
+    return {
+      text: moves.join(" "),
+      preview: renderPreview(cubeStateFromMoves(moves, puzzle.size), puzzle.size),
+    };
+  }
+  const gen = {
+    pyraminx: scramblePyraminx,
+    skewb: scrambleSkewb,
+    megaminx: scrambleMegaminx,
+    sq1: scrambleSquare1,
+  }[puzzle.type];
+  return { text: gen(), preview: null };
+}
+
+// Render the cube state as an unfolded net of HTML boxes. Each face is its own
+// grid group (small gap between stickers, larger gap between faces) laid out on
+// a 4x3 cross: U on top, L F R B band, D below. Works for any cube size n.
+function renderPreview(state, n = 3) {
+  const per = n * n;
+  const faceStart = { U: 0, R: per, F: 2 * per, D: 3 * per, L: 4 * per, B: 5 * per };
+  // Face position (column, row) on the 4-wide x 3-tall cross (1-indexed).
+  const faceOrigin = { U: [2, 1], L: [1, 2], F: [2, 2], R: [3, 2], B: [4, 2], D: [2, 3] };
+
+  let faces = "";
+  for (const face of Object.keys(faceOrigin)) {
+    const [col, row] = faceOrigin[face];
+    let stickers = "";
+    for (let i = 0; i < per; i++) {
+      stickers += `<div class="sticker" style="background:${CUBE_COLORS[state[faceStart[face] + i]]}"></div>`;
+    }
+    faces +=
+      `<div class="face" style="grid-column:${col};grid-row:${row};` +
+      `grid-template-columns:repeat(${n},1fr);grid-template-rows:repeat(${n},1fr)">${stickers}</div>`;
+  }
+  return `<div class="cube-net">${faces}</div>`;
 }
 
 // ---------- Time formatting ----------
@@ -51,15 +251,46 @@ function formatTime(ms) {
   return `${minutes}:${seconds}`;
 }
 
+// Value shown for an average (number ms, Infinity = DNF, null = not enough solves).
+function formatAverage(value) {
+  if (value === null) return "—";
+  if (value === Infinity) return "DNF";
+  return formatTime(value);
+}
+
+// ---------- Penalty helpers ----------
+// penalty: null | "+2" | "DNF"
+function effectiveTime(solve) {
+  if (solve.penalty === "DNF") return Infinity;
+  return solve.time + (solve.penalty === "+2" ? 2000 : 0);
+}
+
+function formatSolve(solve) {
+  if (solve.penalty === "DNF") return "DNF";
+  const shown = formatTime(solve.time + (solve.penalty === "+2" ? 2000 : 0));
+  return solve.penalty === "+2" ? shown + "+" : shown;
+}
+
 // ---------- DOM references ----------
 const scrambleEl = document.getElementById("scramble");
 const timerEl = document.getElementById("timer");
 const hintEl = document.getElementById("hint");
 const newScrambleBtn = document.getElementById("new-scramble");
-const countEl = document.getElementById("stat-count");
 const bestEl = document.getElementById("stat-best");
 const ao5El = document.getElementById("stat-ao5");
 const ao12El = document.getElementById("stat-ao12");
+const pbAo5El = document.getElementById("stat-pb-ao5");
+const pbAo12El = document.getElementById("stat-pb-ao12");
+const solveListEl = document.getElementById("solve-list");
+const solveEmptyEl = document.getElementById("solve-empty");
+const sidebarCountEl = document.getElementById("sidebar-count");
+const clearAllBtn = document.getElementById("clear-all");
+const previewEl = document.getElementById("preview");
+const settingsToggle = document.getElementById("settings-toggle");
+const settingsPanel = document.getElementById("settings-panel");
+const optHideUI = document.getElementById("opt-hide-ui");
+const optHideTimer = document.getElementById("opt-hide-timer");
+const puzzleSelect = document.getElementById("puzzle-select");
 
 // ---------- State ----------
 // "idle"    -> waiting to start
@@ -69,14 +300,90 @@ const STATE = { IDLE: "idle", READY: "ready", RUNNING: "running" };
 let state = STATE.IDLE;
 let startTime = 0;
 let rafId = null;
-const solves = [];
+let currentScramble = "";
+
+// ---------- Settings ----------
+const SETTINGS_KEY = "cube-timer-settings";
+const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false };
+let settings = loadSettings();
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : { ...DEFAULT_SETTINGS };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    /* storage unavailable — session-only settings */
+  }
+}
+
+// ---------- Sessions (one per puzzle) ----------
+// Storage shape: { [puzzleId]: [ { time, penalty, scramble, date }, ... ] }
+const STORAGE_KEY = "cube-timer-sessions";
+const PUZZLE_KEY = "cube-timer-puzzle";
+let allSessions = loadSessions();
+let currentPuzzle = loadCurrentPuzzle();
+let solves = allSessions[currentPuzzle.id] || (allSessions[currentPuzzle.id] = []);
+
+function loadSessions() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSolves() {
+  allSessions[currentPuzzle.id] = solves;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(allSessions));
+  } catch {
+    /* storage unavailable — session-only history */
+  }
+}
+
+function loadCurrentPuzzle() {
+  // A URL hash (e.g. #444) selects a puzzle directly; otherwise use the saved one.
+  const hashId = location.hash.replace("#", "");
+  const hashPuzzle = PUZZLES.find((p) => p.id === hashId);
+  if (hashPuzzle) return hashPuzzle;
+  let id;
+  try { id = localStorage.getItem(PUZZLE_KEY); } catch { id = null; }
+  return PUZZLES.find((p) => p.id === id) || PUZZLES.find((p) => p.id === "333");
+}
+
+function setPuzzle(id) {
+  const puzzle = PUZZLES.find((p) => p.id === id);
+  if (!puzzle || puzzle.id === currentPuzzle.id) return;
+  currentPuzzle = puzzle;
+  try { localStorage.setItem(PUZZLE_KEY, id); } catch { /* ignore */ }
+  solves = allSessions[id] || (allSessions[id] = []);
+  newScramble();
+  render();
+}
 
 // ---------- Scramble rendering ----------
 function newScramble() {
-  const moves = generateScramble();
-  scrambleEl.innerHTML = moves
-    .map((m) => `<span class="move">${m}</span>`)
-    .join(" ");
+  const { text, preview } = makeScramble(currentPuzzle);
+  currentScramble = text;
+  // Render scramble text (handles multi-line scrambles like Megaminx).
+  scrambleEl.innerHTML = text
+    .split("\n")
+    .map((line) =>
+      line.split(" ").map((m) => `<span class="move">${m}</span>`).join(" ")
+    )
+    .join("<br>");
+  previewEl.innerHTML =
+    preview ||
+    `<div class="no-preview">No preview yet<span>${currentPuzzle.name} — scramble only</span></div>`;
 }
 
 // ---------- Timer loop ----------
@@ -92,44 +399,154 @@ function startTimer() {
   timerEl.classList.add("running");
   hintEl.textContent = "Press Space to stop";
   startTime = performance.now();
-  rafId = requestAnimationFrame(tick);
+
+  if (settings.hideTimer) {
+    // Show the "solve" label instead of the ticking time.
+    timerEl.textContent = "solve";
+    timerEl.classList.add("solve-label");
+  } else {
+    rafId = requestAnimationFrame(tick);
+  }
 }
 
 function stopTimer() {
   cancelAnimationFrame(rafId);
   const elapsed = performance.now() - startTime;
+  timerEl.classList.remove("running", "solve-label");
   timerEl.textContent = formatTime(elapsed);
-  timerEl.classList.remove("running");
   state = STATE.IDLE;
+  document.body.classList.remove("solving");
   hintEl.textContent = "Press and hold Space to get ready";
   recordSolve(elapsed);
   newScramble();
 }
 
-// ---------- Statistics ----------
+// ---------- Solves ----------
 function recordSolve(ms) {
-  solves.push(ms);
-  updateStats();
+  solves.push({ time: ms, penalty: null, scramble: currentScramble, date: new Date().toISOString() });
+  saveSolves();
+  render();
 }
 
-// Average of N per WCA: drop the single best and single worst, mean the rest.
-function averageOf(n) {
-  if (solves.length < n) return null;
-  const window = solves.slice(-n).sort((a, b) => a - b);
-  const trimmed = window.slice(1, -1);
+function deleteSolve(index) {
+  solves.splice(index, 1);
+  saveSolves();
+  render();
+}
+
+// Toggle a penalty on a solve (clicking the active penalty clears it).
+function togglePenalty(index, penalty) {
+  solves[index].penalty = solves[index].penalty === penalty ? null : penalty;
+  saveSolves();
+  render();
+}
+
+function clearSolves() {
+  if (solves.length === 0) return;
+  if (!confirm("Delete all solves?")) return;
+  solves = [];
+  saveSolves();
+  render();
+}
+
+// ---------- Statistics ----------
+// Average of exactly n solves per WCA: drop the single best and single worst,
+// mean the rest. A DNF counts as the worst; two or more DNF -> DNF average.
+function averageOfWindow(windowSolves) {
+  const times = windowSolves.map(effectiveTime).sort((a, b) => a - b);
+  const trimmed = times.slice(1, -1);
+  if (trimmed.some((t) => t === Infinity)) return Infinity; // DNF average
   const sum = trimmed.reduce((acc, t) => acc + t, 0);
   return sum / trimmed.length;
 }
 
-function updateStats() {
-  countEl.textContent = solves.length;
-  bestEl.textContent = formatTime(Math.min(...solves));
+// Current rolling average of the most recent n solves.
+function currentAverage(n) {
+  if (solves.length < n) return null;
+  return averageOfWindow(solves.slice(-n));
+}
 
-  const ao5 = averageOf(5);
-  ao5El.textContent = ao5 === null ? "—" : formatTime(ao5);
+// Best (lowest) average of n across every consecutive window in history.
+function bestAverage(n) {
+  if (solves.length < n) return null;
+  let best = Infinity;
+  for (let i = 0; i + n <= solves.length; i++) {
+    const avg = averageOfWindow(solves.slice(i, i + n));
+    if (avg < best) best = avg;
+  }
+  return best === Infinity ? Infinity : best;
+}
 
-  const ao12 = averageOf(12);
-  ao12El.textContent = ao12 === null ? "—" : formatTime(ao12);
+// ---------- Rendering ----------
+function render() {
+  renderStats();
+  renderSolveList();
+}
+
+function renderStats() {
+  // PB single ignores DNF solves entirely.
+  const finished = solves.filter((s) => s.penalty !== "DNF").map(effectiveTime);
+  bestEl.textContent = finished.length ? formatTime(Math.min(...finished)) : "—";
+
+  ao5El.textContent = formatAverage(currentAverage(5));
+  ao12El.textContent = formatAverage(currentAverage(12));
+  pbAo5El.textContent = formatAverage(bestAverage(5));
+  pbAo12El.textContent = formatAverage(bestAverage(12));
+}
+
+function renderSolveList() {
+  sidebarCountEl.textContent = solves.length;
+  solveEmptyEl.style.display = solves.length === 0 ? "block" : "none";
+  solveListEl.innerHTML = "";
+
+  const finished = solves.filter((s) => s.penalty !== "DNF").map(effectiveTime);
+  const bestTime = finished.length ? Math.min(...finished) : null;
+
+  solves.forEach((solve, index) => {
+    const li = document.createElement("li");
+    li.className = "solve-item";
+    li.title = solve.scramble;
+
+    const num = document.createElement("span");
+    num.className = "solve-index";
+    num.textContent = `${index + 1}.`;
+
+    const time = document.createElement("span");
+    time.className = "solve-time";
+    time.textContent = formatSolve(solve);
+    if (solve.penalty === "DNF") time.classList.add("dnf");
+    else if (bestTime !== null && effectiveTime(solve) === bestTime) {
+      time.style.color = "var(--ready)";
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "solve-actions";
+
+    const plus2 = document.createElement("button");
+    plus2.className = "pen" + (solve.penalty === "+2" ? " active" : "");
+    plus2.type = "button";
+    plus2.textContent = "+2";
+    plus2.title = "Toggle +2 penalty";
+    plus2.addEventListener("click", () => togglePenalty(index, "+2"));
+
+    const dnf = document.createElement("button");
+    dnf.className = "dnf" + (solve.penalty === "DNF" ? " active" : "");
+    dnf.type = "button";
+    dnf.textContent = "DNF";
+    dnf.title = "Toggle DNF";
+    dnf.addEventListener("click", () => togglePenalty(index, "DNF"));
+
+    const del = document.createElement("button");
+    del.className = "del";
+    del.type = "button";
+    del.textContent = "×";
+    del.title = "Delete solve";
+    del.addEventListener("click", () => deleteSolve(index));
+
+    actions.append(plus2, dnf, del);
+    li.append(num, time, actions);
+    solveListEl.prepend(li); // newest on top
+  });
 }
 
 // ---------- Keyboard handling ----------
@@ -139,14 +556,14 @@ document.addEventListener("keydown", (e) => {
   if (e.repeat) return; // ignore auto-repeat while holding
 
   if (state === STATE.RUNNING) {
-    // Stop the timer.
     stopTimer();
   } else if (state === STATE.IDLE) {
-    // Arm the timer: go green.
+    // Arm the timer: go green and enter focus mode.
     state = STATE.READY;
     timerEl.classList.add("ready");
     timerEl.textContent = "0.00";
     hintEl.textContent = "Release to start";
+    if (settings.hideUI) document.body.classList.add("solving");
   }
 });
 
@@ -155,15 +572,62 @@ document.addEventListener("keyup", (e) => {
   e.preventDefault();
 
   if (state === STATE.READY) {
-    // Release from armed state starts the timer.
     startTimer();
   }
 });
 
+// ---------- UI events ----------
 newScrambleBtn.addEventListener("click", () => {
   newScramble();
   newScrambleBtn.blur(); // keep Space bound to the timer, not the button
 });
 
+// Puzzle selector: populate and switch sessions.
+for (const p of PUZZLES) {
+  const opt = document.createElement("option");
+  opt.value = p.id;
+  opt.textContent = p.name;
+  puzzleSelect.appendChild(opt);
+}
+puzzleSelect.value = currentPuzzle.id;
+puzzleSelect.addEventListener("change", () => {
+  setPuzzle(puzzleSelect.value);
+  puzzleSelect.blur();
+});
+
+clearAllBtn.addEventListener("click", () => {
+  clearSolves();
+  clearAllBtn.blur();
+});
+
+// ---------- Options menu ----------
+optHideUI.checked = settings.hideUI;
+optHideTimer.checked = settings.hideTimer;
+
+settingsToggle.addEventListener("click", (e) => {
+  e.stopPropagation();
+  settingsPanel.hidden = !settingsPanel.hidden;
+  settingsToggle.blur();
+});
+
+optHideUI.addEventListener("change", () => {
+  settings.hideUI = optHideUI.checked;
+  saveSettings();
+});
+
+optHideTimer.addEventListener("change", () => {
+  settings.hideTimer = optHideTimer.checked;
+  saveSettings();
+});
+
+// Close the panel when clicking outside of it.
+document.addEventListener("click", (e) => {
+  if (settingsPanel.hidden) return;
+  if (!settingsPanel.contains(e.target) && e.target !== settingsToggle) {
+    settingsPanel.hidden = true;
+  }
+});
+
 // ---------- Init ----------
 newScramble();
+render();
