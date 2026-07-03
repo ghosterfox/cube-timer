@@ -281,6 +281,11 @@ const ao5El = document.getElementById("stat-ao5");
 const ao12El = document.getElementById("stat-ao12");
 const pbAo5El = document.getElementById("stat-pb-ao5");
 const pbAo12El = document.getElementById("stat-pb-ao12");
+const ao50El = document.getElementById("stat-ao50");
+const ao100El = document.getElementById("stat-ao100");
+const pbAo50El = document.getElementById("stat-pb-ao50");
+const pbAo100El = document.getElementById("stat-pb-ao100");
+const statGrid = document.getElementById("stat-grid");
 const solveListEl = document.getElementById("solve-list");
 const solveEmptyEl = document.getElementById("solve-empty");
 const sidebarCountEl = document.getElementById("sidebar-count");
@@ -290,6 +295,8 @@ const settingsToggle = document.getElementById("settings-toggle");
 const settingsPanel = document.getElementById("settings-panel");
 const optHideUI = document.getElementById("opt-hide-ui");
 const optHideTimer = document.getElementById("opt-hide-timer");
+const optShowBig = document.getElementById("opt-show-big");
+const settingsClose = document.getElementById("settings-close");
 const puzzleSelect = document.getElementById("puzzle-select");
 const scrambleModal = document.getElementById("scramble-modal");
 const modalTitle = document.getElementById("modal-title");
@@ -310,7 +317,7 @@ let currentScramble = "";
 
 // ---------- Settings ----------
 const SETTINGS_KEY = "cube-timer-settings";
-const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false };
+const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showBig: false };
 let settings = loadSettings();
 
 function loadSettings() {
@@ -592,6 +599,10 @@ function renderStats() {
   ao12El.textContent = formatAverage(currentAverage(12));
   pbAo5El.textContent = formatAverage(bestAverage(5));
   pbAo12El.textContent = formatAverage(bestAverage(12));
+  ao50El.textContent = formatAverage(currentAverage(50));
+  ao100El.textContent = formatAverage(currentAverage(100));
+  pbAo50El.textContent = formatAverage(bestAverage(50));
+  pbAo100El.textContent = formatAverage(bestAverage(100));
 }
 
 function renderSolveList() {
@@ -660,13 +671,13 @@ function renderSolveList() {
 
 // ---------- Keyboard handling ----------
 document.addEventListener("keydown", (e) => {
-  // Escape closes the modal if it's open.
-  if (e.key === "Escape" && !scrambleModal.hidden) {
-    closeScrambleModal();
-    return;
+  // Escape closes an open modal.
+  if (e.key === "Escape") {
+    if (!scrambleModal.hidden) { closeScrambleModal(); return; }
+    if (!settingsPanel.hidden) { closeSettings(); return; }
   }
   if (e.code !== "Space") return;
-  if (!scrambleModal.hidden) return; // don't arm the timer behind the modal
+  if (!scrambleModal.hidden || !settingsPanel.hidden) return; // don't arm behind a modal
   e.preventDefault();
   if (e.repeat) return; // ignore auto-repeat while holding
 
@@ -726,14 +737,28 @@ clearAllBtn.addEventListener("click", () => {
   clearAllBtn.blur();
 });
 
-// ---------- Options menu ----------
+// ---------- Options menu (modal) ----------
+function applyShowBig() {
+  statGrid.classList.toggle("extended", settings.showBig);
+}
+
+function closeSettings() {
+  settingsPanel.hidden = true;
+}
+
 optHideUI.checked = settings.hideUI;
 optHideTimer.checked = settings.hideTimer;
+optShowBig.checked = settings.showBig;
+applyShowBig();
 
-settingsToggle.addEventListener("click", (e) => {
-  e.stopPropagation();
-  settingsPanel.hidden = !settingsPanel.hidden;
+settingsToggle.addEventListener("click", () => {
+  settingsPanel.hidden = false;
   settingsToggle.blur();
+});
+
+settingsClose.addEventListener("click", closeSettings);
+settingsPanel.addEventListener("click", (e) => {
+  if (e.target === settingsPanel) closeSettings();
 });
 
 optHideUI.addEventListener("change", () => {
@@ -746,12 +771,10 @@ optHideTimer.addEventListener("change", () => {
   saveSettings();
 });
 
-// Close the panel when clicking outside of it.
-document.addEventListener("click", (e) => {
-  if (settingsPanel.hidden) return;
-  if (!settingsPanel.contains(e.target) && e.target !== settingsToggle) {
-    settingsPanel.hidden = true;
-  }
+optShowBig.addEventListener("change", () => {
+  settings.showBig = optShowBig.checked;
+  saveSettings();
+  applyShowBig();
 });
 
 // ---------- Init ----------
