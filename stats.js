@@ -178,19 +178,19 @@ function renderProgression(solves) {
     svg += `<text x="${x(i).toFixed(1)}" y="${H - 10}" fill="var(--muted)" font-size="12" font-weight="700" text-anchor="middle">${i + 1}</text>`;
   }
 
-  // single-solve line (recessive gray reference)
-  svg += `<path d="${gapPath(seq, x, y)}" fill="none" stroke="var(--single)" stroke-width="1.25" stroke-opacity="0.5" stroke-linejoin="round"/>`;
+  // single-solve line — the primary series (raw times)
+  svg += `<path d="${gapPath(seq, x, y)}" fill="none" stroke="var(--series-1)" stroke-width="1.6" stroke-opacity="0.9" stroke-linejoin="round"/>`;
   if (n <= 80) {
     seq.forEach((v, i) => {
       if (v == null) return;
-      svg += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.4" fill="var(--single)" fill-opacity="0.7" stroke="var(--card)" stroke-width="1.25"/>`;
+      svg += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.6" fill="var(--series-1)" stroke="var(--card)" stroke-width="1.5"/>`;
     });
   }
-  // ao5 + ao12 lines (the two headline series)
-  svg += `<path d="${gapPath(ao5, x, y)}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-  svg += `<path d="${gapPath(ao12, x, y)}" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  // ao5 + ao12 rolling-average lines layered on top
+  svg += `<path d="${gapPath(ao5, x, y)}" fill="none" stroke="var(--series-2)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  svg += `<path d="${gapPath(ao12, x, y)}" fill="none" stroke="var(--series-3)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
 
-  // direct end-labels for the two averages (neutral text, colored dot)
+  // direct end-labels (neutral text, colored dot)
   const lastIdx = (arr) => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null && isFinite(arr[i])) return i; return -1; };
   const label = (arr, color, dy) => {
     const i = lastIdx(arr);
@@ -199,8 +199,8 @@ function renderProgression(solves) {
     svg += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--card)" stroke-width="2"/>`;
     svg += `<text x="${(px - 7).toFixed(1)}" y="${(py + dy).toFixed(1)}" fill="var(--fg)" font-size="12" font-weight="800" text-anchor="end">${formatTime(arr[i])}</text>`;
   };
-  label(ao5, "var(--series-1)", -8);
-  label(ao12, "var(--series-2)", 15);
+  label(ao5, "var(--series-2)", -8);
+  label(ao12, "var(--series-3)", 15);
 
   // crosshair + hover targets
   svg += `<line class="xhair" x1="0" y1="${M.t}" x2="0" y2="${M.t + PH}" stroke="var(--axis)" stroke-width="1" opacity="0"/>`;

@@ -698,28 +698,28 @@ kbd {
   flex: 1;
   display: flex;
   align-items: stretch;
-  gap: 0.75rem;
-  padding: 0.8rem 1rem;
+  gap: 0;
+  padding: 0;
 }
 
 .stat {
   --outline: var(--border);
   background: linear-gradient(180deg, var(--card-2), var(--card));
-  border: 1.5px solid color-mix(in srgb, var(--outline) 62%, transparent);
-  border-radius: 6px;
+  /* single-side borders so tiled cards share one hairline (no double seam, no gap) */
+  border-right: 1.5px solid color-mix(in srgb, var(--outline) 55%, var(--border));
+  border-bottom: 1.5px solid color-mix(in srgb, var(--outline) 55%, var(--border));
   padding: 0.85rem 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 10px 24px rgba(0, 0, 0, 0.28);
-  transition: transform 0.2s var(--bounce), border-color 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: background 0.2s ease;
 }
 
 .stat:hover {
-  transform: translateY(-3px);
-  border-color: var(--outline);
+  background: linear-gradient(180deg, var(--card-2), var(--card-2));
 }
 
 .stat-pb {
@@ -732,7 +732,7 @@ kbd {
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  gap: 0.75rem;
+  gap: 0;
 }
 
 .stat-grid .card-ao50,

@@ -12,11 +12,10 @@
   /* chart ink / chrome */
   --grid: rgba(255, 255, 255, 0.06);
   --axis: rgba(255, 255, 255, 0.16);
-  /* CVD-safe series pair (blue + orange) */
+  /* CVD-safe series set: single (blue) / ao5 (orange) / ao12 (violet) */
   --series-1: #3987e5;
   --series-2: #d95926;
-  /* recessive neutral for the raw single-solve reference line */
-  --single: #8b8598;
+  --series-3: #a78bfa;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
