@@ -112,56 +112,34 @@ function renderKPIs(solves) {
   ).join("");
 }
 
-// WCA rolling average over a window: drop best + worst, mean the rest.
-// A DNF counts as the worst; two or more DNFs make the average a DNF (null).
-function wcaAverage(window) {
-  const k = window.length;
-  if (k < 3) return null;
-  const dnf = window.filter((t) => t == null).length;
-  if (dnf >= 2) return null;
-  const vals = window.map((t) => (t == null ? Infinity : t)).sort((a, b) => a - b);
-  const kept = vals.slice(1, k - 1);
-  return kept.reduce((a, b) => a + b, 0) / kept.length;
-}
-
-// Rolling ao_k series aligned to the full solve sequence (null before enough solves).
-function rollingAverage(seq, k) {
-  return seq.map((_, i) => (i < k - 1 ? null : wcaAverage(seq.slice(i - k + 1, i + 1))));
-}
-
-// SVG path that lifts the pen across null gaps.
-function gapPath(vals, xf, yf) {
-  let d = "", pen = false;
-  vals.forEach((v, i) => {
-    if (v == null) { pen = false; return; }
-    d += `${pen ? "L" : "M"}${xf(i).toFixed(1)},${yf(v).toFixed(1)} `;
-    pen = true;
-  });
-  return d.trim();
-}
-
 // ---------- Progression chart ----------
 function renderProgression(solves) {
   const plot = document.getElementById("prog-plot");
-  // Full sequence keyed by solve number; null marks a DNF.
-  const seq = solves.map(effectiveTime);
-  const rawCount = seq.filter((t) => t != null).length;
-  if (rawCount < 2) {
+  const pts = [];
+  solves.forEach((s) => {
+    const t = effectiveTime(s);
+    if (t != null) pts.push(t);
+  });
+  if (pts.length < 2) {
     plot.innerHTML = `<div class="empty">Need at least 2 solves to chart progression.</div>`;
     return;
   }
 
-  const ao5 = rollingAverage(seq, 5);
-  const ao12 = rollingAverage(seq, 12);
+  // Trailing average of up to 12.
+  const trend = pts.map((_, i) => {
+    const from = Math.max(0, i - 11);
+    const win = pts.slice(from, i + 1);
+    return win.reduce((a, b) => a + b, 0) / win.length;
+  });
 
-  const shown = seq.concat(ao5, ao12).filter((v) => v != null && isFinite(v));
-  let yMin = Math.min(...shown), yMax = Math.max(...shown);
+  const all = pts.concat(trend);
+  let yMin = Math.min(...all), yMax = Math.max(...all);
   const pad = (yMax - yMin) * 0.12 || yMax * 0.1 || 1;
   yMin = Math.max(0, yMin - pad); yMax += pad;
   const yt = axisTicks(yMin, yMax, 5);
   yMin = yt.start; yMax = yt.end;
 
-  const n = seq.length;
+  const n = pts.length;
   const x = (i) => M.l + (n === 1 ? PW / 2 : (i / (n - 1)) * PW);
   const y = (v) => M.t + PH - ((v - yMin) / (yMax - yMin)) * PH;
 
@@ -178,33 +156,26 @@ function renderProgression(solves) {
     svg += `<text x="${x(i).toFixed(1)}" y="${H - 10}" fill="var(--muted)" font-size="12" font-weight="700" text-anchor="middle">${i + 1}</text>`;
   }
 
-  // single-solve line — the primary series (raw times)
-  svg += `<path d="${gapPath(seq, x, y)}" fill="none" stroke="var(--series-1)" stroke-width="1.6" stroke-opacity="0.9" stroke-linejoin="round"/>`;
+  // raw line
+  const rawPath = pts.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  svg += `<path d="${rawPath}" fill="none" stroke="var(--series-1)" stroke-width="1.5" stroke-opacity="0.55" stroke-linejoin="round"/>`;
+  // trend line
+  const trPath = trend.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  svg += `<path d="${trPath}" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  // raw dots (only when not too dense)
   if (n <= 80) {
-    seq.forEach((v, i) => {
-      if (v == null) return;
+    pts.forEach((v, i) => {
       svg += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.6" fill="var(--series-1)" stroke="var(--card)" stroke-width="1.5"/>`;
     });
   }
-  // ao5 + ao12 rolling-average lines layered on top
-  svg += `<path d="${gapPath(ao5, x, y)}" fill="none" stroke="var(--series-2)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
-  svg += `<path d="${gapPath(ao12, x, y)}" fill="none" stroke="var(--series-3)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
-
-  // direct end-labels (neutral text, colored dot)
-  const lastIdx = (arr) => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null && isFinite(arr[i])) return i; return -1; };
-  const label = (arr, color, dy) => {
-    const i = lastIdx(arr);
-    if (i < 0) return;
-    const px = x(i), py = y(arr[i]);
-    svg += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="3.5" fill="${color}" stroke="var(--card)" stroke-width="2"/>`;
-    svg += `<text x="${(px - 7).toFixed(1)}" y="${(py + dy).toFixed(1)}" fill="var(--fg)" font-size="12" font-weight="800" text-anchor="end">${formatTime(arr[i])}</text>`;
-  };
-  label(ao5, "var(--series-2)", -8);
-  label(ao12, "var(--series-3)", 15);
+  // direct end-labels
+  const lastRaw = pts[n - 1], lastTr = trend[n - 1];
+  svg += `<circle cx="${x(n - 1).toFixed(1)}" cy="${y(lastTr).toFixed(1)}" r="3.5" fill="var(--series-2)" stroke="var(--card)" stroke-width="2"/>`;
+  svg += `<text x="${(x(n - 1) - 6).toFixed(1)}" y="${(y(lastRaw) - 8).toFixed(1)}" fill="var(--fg)" font-size="12" font-weight="800" text-anchor="end">${formatTime(lastRaw)}</text>`;
 
   // crosshair + hover targets
   svg += `<line class="xhair" x1="0" y1="${M.t}" x2="0" y2="${M.t + PH}" stroke="var(--axis)" stroke-width="1" opacity="0"/>`;
-  svg += `<circle class="xdot" r="4" fill="var(--fg)" stroke="var(--card)" stroke-width="2" opacity="0"/>`;
+  svg += `<circle class="xdot" r="4" fill="var(--series-1)" stroke="var(--card)" stroke-width="2" opacity="0"/>`;
 
   plot.innerHTML =
     `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">${svg}</svg>` +
@@ -215,25 +186,19 @@ function renderProgression(solves) {
   const tip = plot.querySelector("#prog-tip");
   const xhair = plot.querySelector(".xhair");
   const xdot = plot.querySelector(".xdot");
-  const fmt = (v) => (v == null || !isFinite(v) ? "—" : formatTime(v));
   svgEl.addEventListener("mousemove", (e) => {
     const r = svgEl.getBoundingClientRect();
     const sx = ((e.clientX - r.left) / r.width) * W;
     let i = Math.round(((sx - M.l) / PW) * (n - 1));
     i = Math.max(0, Math.min(n - 1, i));
-    // anchor the marker/tooltip to whichever value exists at this solve
-    const anchor = seq[i] != null ? seq[i] : (ao5[i] != null ? ao5[i] : ao12[i]);
-    const px = x(i), py = anchor != null ? y(anchor) : M.t + PH;
+    const px = x(i), py = y(pts[i]);
     xhair.setAttribute("x1", px); xhair.setAttribute("x2", px); xhair.setAttribute("opacity", "1");
-    xdot.setAttribute("cx", px); xdot.setAttribute("cy", py);
-    xdot.setAttribute("opacity", anchor != null ? "1" : "0");
+    xdot.setAttribute("cx", px); xdot.setAttribute("cy", py); xdot.setAttribute("opacity", "1");
     tip.style.opacity = "1";
     tip.style.left = `${(px / W) * r.width}px`;
     tip.style.top = `${(py / H) * r.height}px`;
-    tip.innerHTML =
-      `<span class="t-muted">Solve ${i + 1}</span><br>` +
-      `${seq[i] == null ? "<span class='t-muted'>DNF</span>" : fmt(seq[i])}<br>` +
-      `<span class="t-muted">ao5</span> ${fmt(ao5[i])} · <span class="t-muted">ao12</span> ${fmt(ao12[i])}`;
+    tip.innerHTML = `<span class="t-muted">Solve ${i + 1}</span><br>${formatTime(pts[i])}` +
+      `<br><span class="t-muted">avg ${formatTime(trend[i])}</span>`;
   });
   svgEl.addEventListener("mouseleave", () => {
     tip.style.opacity = "0"; xhair.setAttribute("opacity", "0"); xdot.setAttribute("opacity", "0");

@@ -12,10 +12,9 @@
   /* chart ink / chrome */
   --grid: rgba(255, 255, 255, 0.06);
   --axis: rgba(255, 255, 255, 0.16);
-  /* CVD-safe series set: single (blue) / ao5 (orange) / ao12 (violet) */
+  /* CVD-safe series pair (blue + orange) */
   --series-1: #3987e5;
   --series-2: #d95926;
-  --series-3: #a78bfa;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
