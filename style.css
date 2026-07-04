@@ -705,9 +705,10 @@ kbd {
 .stat {
   --outline: var(--border);
   background: linear-gradient(180deg, var(--card-2), var(--card));
-  /* single-side borders so tiled cards share one hairline (no double seam, no gap) */
+  /* single-side borders so tiled cards share one hairline (no double seam, no gap);
+     cube-color accent only on the vertical dividers, neutral on the horizontal ones */
   border-right: 1.5px solid color-mix(in srgb, var(--outline) 55%, var(--border));
-  border-bottom: 1.5px solid color-mix(in srgb, var(--outline) 55%, var(--border));
+  border-bottom: 1.5px solid var(--border);
   padding: 0.85rem 1rem;
   display: flex;
   flex-direction: column;
