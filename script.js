@@ -200,20 +200,18 @@ function scrambleSquare1() {
 
 // Build a scramble (and preview HTML) for a given puzzle.
 function makeScramble(puzzle) {
+  let text;
   if (puzzle.type === "cube") {
-    const moves = scrambleNxN(puzzle.size);
-    return {
-      text: moves.join(" "),
-      preview: renderPreview(cubeStateFromMoves(moves, puzzle.size), puzzle.size),
-    };
+    text = scrambleNxN(puzzle.size).join(" ");
+  } else {
+    text = {
+      pyraminx: scramblePyraminx,
+      skewb: scrambleSkewb,
+      megaminx: scrambleMegaminx,
+      sq1: scrambleSquare1,
+    }[puzzle.type]();
   }
-  const gen = {
-    pyraminx: scramblePyraminx,
-    skewb: scrambleSkewb,
-    megaminx: scrambleMegaminx,
-    sq1: scrambleSquare1,
-  }[puzzle.type];
-  return { text: gen(), preview: null };
+  return { text, preview: previewForScramble(text, puzzle) };
 }
 
 // Render the cube state as an unfolded net of HTML boxes. Each face is its own
@@ -237,6 +235,119 @@ function renderPreview(state, n = 3) {
       `grid-template-columns:repeat(${n},1fr);grid-template-rows:repeat(${n},1fr)">${stickers}</div>`;
   }
   return `<div class="cube-net">${faces}</div>`;
+}
+
+// ---------- Pyraminx & Skewb engines ----------
+// Move permutation tables (newState[i] = state[perm[i]]) were derived from a
+// geometric 3D model and verified in Python: every move^3 = identity, capital
+// moves cycle 12 facelets / tips cycle 3, scramble·inverse = solved, and sticker
+// colors are conserved. "'" applies the perm twice (its inverse, since order 3).
+function applyPerm(state, perm) {
+  return perm.map((p) => state[p]);
+}
+
+function stateFromScramble(text, moves, solved) {
+  let st = solved.slice();
+  for (const tok of text.split(/\s+/).filter(Boolean)) {
+    const perm = moves[tok[0]];
+    if (!perm) continue;
+    const times = tok.endsWith("'") ? 2 : 1;
+    for (let k = 0; k < times; k++) st = applyPerm(st, perm);
+  }
+  return st;
+}
+
+// --- Pyraminx: 4 triangular faces, 9 facelets each (index = face*9 + local) ---
+const PYRA_FACES = ["U", "L", "R", "B"];
+const PYRA_COLORS = { U: "#12a150", L: "#1466c4", R: "#d1332b", B: "#ffd21a" };
+const PYRA_MOVES = {
+  U: [0,1,2,3,4,5,6,7,8,18,21,20,19,13,14,15,16,17,27,30,29,28,22,23,24,25,26,9,10,11,12,31,32,33,34,35],
+  u: [0,1,2,3,4,5,6,7,8,18,10,11,12,13,14,15,16,17,27,19,20,21,22,23,24,25,26,9,28,29,30,31,32,33,34,35],
+  L: [31,28,32,33,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,3,20,21,0,2,1,25,26,27,24,29,30,22,23,19,34,35],
+  l: [31,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,0,23,24,25,26,27,28,29,30,22,32,33,34,35],
+  R: [0,15,2,3,13,14,10,7,8,9,33,11,12,35,34,30,16,17,18,19,20,21,22,23,24,25,26,27,28,29,1,31,32,6,5,4],
+  r: [0,1,2,3,13,5,6,7,8,9,10,11,12,35,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,4],
+  B: [0,1,2,21,4,5,24,25,26,9,10,11,6,13,14,3,7,8,18,19,20,15,22,23,12,16,17,27,28,29,30,31,32,33,34,35],
+  b: [0,1,2,3,4,5,6,7,26,9,10,11,12,13,14,15,16,8,18,19,20,21,22,23,24,25,17,27,28,29,30,31,32,33,34,35],
+};
+const PYRA_SOLVED = PYRA_FACES.flatMap((f) => Array(9).fill(f));
+
+function pyraStateFromScramble(text) {
+  return stateFromScramble(text, PYRA_MOVES, PYRA_SOLVED);
+}
+
+// 9 sub-triangles per face as barycentric-int corners (i,j,k)/3 over the face's
+// (A=top, B=bottom-left, C=bottom-right) vertices — matches the verified model.
+const PYRA_TRIS = [
+  [[3,0,0],[2,1,0],[2,0,1]],
+  [[2,1,0],[1,2,0],[1,1,1]],
+  [[2,1,0],[1,1,1],[2,0,1]],
+  [[2,0,1],[1,1,1],[1,0,2]],
+  [[1,2,0],[0,3,0],[0,2,1]],
+  [[1,2,0],[0,2,1],[1,1,1]],
+  [[1,1,1],[0,2,1],[0,1,2]],
+  [[1,1,1],[0,1,2],[1,0,2]],
+  [[1,0,2],[0,1,2],[0,0,3]],
+];
+
+function renderPyraminx(state) {
+  const h = Math.sqrt(3); // height of a side-2 equilateral triangle
+  const P_T = [1, 0], P_BL = [0, h], P_BR = [2, h];
+  const M_L = [0.5, h / 2], M_R = [1.5, h / 2], M_B = [1, h];
+  // Net = one big triangle split into 4: center face inverted, 3 faces at corners.
+  // Corner net-points per face [A, B, C] chosen so shared edges (and colors) align.
+  const FP = { U: [M_L, M_R, M_B], L: [P_BR, M_R, M_B], R: [P_BL, M_L, M_B], B: [P_T, M_L, M_R] };
+  let polys = "";
+  PYRA_FACES.forEach((f, fi) => {
+    const [A, B, C] = FP[f];
+    for (let li = 0; li < 9; li++) {
+      const pts = PYRA_TRIS[li].map(([i, j, k]) =>
+        `${((i * A[0] + j * B[0] + k * C[0]) / 3).toFixed(3)},${((i * A[1] + j * B[1] + k * C[1]) / 3).toFixed(3)}`
+      ).join(" ");
+      polys += `<polygon points="${pts}" fill="${PYRA_COLORS[state[fi * 9 + li]]}" stroke="#0d0b12" stroke-width="0.05" stroke-linejoin="round"/>`;
+    }
+  });
+  return `<div class="pzl-net" style="aspect-ratio:${(2 / h).toFixed(4)}">` +
+    `<svg viewBox="-0.07 -0.07 ${(2 + 0.14).toFixed(2)} ${(h + 0.14).toFixed(3)}" preserveAspectRatio="xMidYMid meet">${polys}</svg></div>`;
+}
+
+// --- Skewb: 6 faces, 5 facelets each (index = face*5 + [center,TL,TR,BR,BL]) ---
+const SKEWB_FACES = ["U", "R", "F", "D", "L", "B"];
+const SKEWB_MOVES = {
+  U: [5,1,9,6,7,10,12,13,8,11,0,2,3,4,14,15,16,22,18,19,20,21,26,23,24,25,17,27,28,29],
+  L: [20,21,22,3,24,5,6,11,8,9,10,19,12,13,14,15,16,17,18,7,25,27,28,23,26,0,4,1,2,29],
+  R: [0,1,24,3,4,25,6,28,29,26,10,11,12,2,14,5,16,7,8,9,20,21,22,23,13,15,19,27,17,18],
+  B: [0,1,2,3,9,5,6,7,8,28,15,17,12,19,16,20,23,24,18,22,10,21,13,14,11,25,26,27,4,29],
+};
+const SKEWB_SOLVED = SKEWB_FACES.flatMap((f) => Array(5).fill(f));
+
+function skewbStateFromScramble(text) {
+  return stateFromScramble(text, SKEWB_MOVES, SKEWB_SOLVED);
+}
+
+function renderSkewb(state) {
+  const gap = 0.14, step = 1 + gap;
+  const pos = { U: [1, 0], L: [0, 1], F: [1, 1], R: [2, 1], B: [3, 1], D: [1, 2] };
+  // 5 facelet polygons within a unit square: center diamond + 4 corner triangles.
+  const shapes = [
+    [[0.5,0],[1,0.5],[0.5,1],[0,0.5]], // center
+    [[0,0],[0.5,0],[0,0.5]],           // TL
+    [[1,0],[1,0.5],[0.5,0]],           // TR
+    [[1,1],[0.5,1],[1,0.5]],           // BR
+    [[0,1],[0,0.5],[0.5,1]],           // BL
+  ];
+  let polys = "";
+  SKEWB_FACES.forEach((f, fi) => {
+    const [c, r] = pos[f];
+    const ox = c * step, oy = r * step;
+    for (let s = 0; s < 5; s++) {
+      const pts = shapes[s].map(([x, y]) => `${(ox + x).toFixed(3)},${(oy + y).toFixed(3)}`).join(" ");
+      polys += `<polygon points="${pts}" fill="${CUBE_COLORS[state[fi * 5 + s]]}" stroke="#0d0b12" stroke-width="0.055" stroke-linejoin="round"/>`;
+    }
+  });
+  const W = 4 + 3 * gap, H = 3 + 2 * gap;
+  return `<div class="pzl-net" style="aspect-ratio:${(W / H).toFixed(4)}">` +
+    `<svg viewBox="0 0 ${W.toFixed(2)} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet">${polys}</svg></div>`;
 }
 
 // ---------- Time formatting ----------
@@ -526,11 +637,15 @@ function scrambleToHTML(text) {
     .join("<br>");
 }
 
-// Cube net HTML for an arbitrary scramble under `puzzle`, or null for non-cubes.
+// Net HTML for an arbitrary scramble under `puzzle`, or null when unsupported.
 function previewForScramble(text, puzzle) {
-  if (puzzle.type !== "cube") return null;
-  const moves = text.split(/\s+/).filter(Boolean);
-  return renderPreview(cubeStateFromMoves(moves, puzzle.size), puzzle.size);
+  if (puzzle.type === "cube") {
+    const moves = text.split(/\s+/).filter(Boolean);
+    return renderPreview(cubeStateFromMoves(moves, puzzle.size), puzzle.size);
+  }
+  if (puzzle.type === "pyraminx") return renderPyraminx(pyraStateFromScramble(text));
+  if (puzzle.type === "skewb") return renderSkewb(skewbStateFromScramble(text));
+  return null;
 }
 
 function newScramble() {
