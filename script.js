@@ -290,6 +290,43 @@ const PYRA_TRIS = [
   [[1,0,2],[0,1,2],[0,0,3]],
 ];
 
+// --- Shared SVG helpers so the puzzle nets match the cube net's tactile look ---
+function _centroid(pts) {
+  const s = pts.reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]);
+  return [s[0] / pts.length, s[1] / pts.length];
+}
+function _toward(pts, c, f) {
+  return pts.map((p) => [c[0] + (p[0] - c[0]) * f, c[1] + (p[1] - c[1]) * f]);
+}
+// Path for a polygon with rounded corners (radius clamped to each edge).
+function _roundedPath(pts, r) {
+  const n = pts.length;
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const p1 = pts[i], p0 = pts[(i - 1 + n) % n], p2 = pts[(i + 1) % n];
+    let v1 = [p0[0] - p1[0], p0[1] - p1[1]], v2 = [p2[0] - p1[0], p2[1] - p1[1]];
+    const l1 = Math.hypot(v1[0], v1[1]) || 1, l2 = Math.hypot(v2[0], v2[1]) || 1;
+    const rr = Math.min(r, l1 / 2, l2 / 2);
+    const a = [p1[0] + (v1[0] / l1) * rr, p1[1] + (v1[1] / l1) * rr];
+    const b = [p1[0] + (v2[0] / l2) * rr, p1[1] + (v2[1] / l2) * rr];
+    d += (i === 0 ? "M" : "L") + `${a[0].toFixed(3)},${a[1].toFixed(3)}`;
+    d += `Q${p1[0].toFixed(3)},${p1[1].toFixed(3)} ${b[0].toFixed(3)},${b[1].toFixed(3)}`;
+  }
+  return d + "Z";
+}
+// Top-light / bottom-dark inset-style bevel, mapped to each sticker's bbox.
+const NET_BEVEL =
+  `<defs><linearGradient id="netbev" x1="0" y1="0" x2="0" y2="1">` +
+  `<stop offset="0" stop-color="#fff" stop-opacity="0.34"/>` +
+  `<stop offset="0.14" stop-color="#fff" stop-opacity="0"/>` +
+  `<stop offset="0.86" stop-color="#000" stop-opacity="0"/>` +
+  `<stop offset="1" stop-color="#000" stop-opacity="0.26"/></linearGradient></defs>`;
+// One beveled sticker: colored fill + gradient overlay, inset for a gap + rounded.
+function _sticker(pts, color, gap, radius) {
+  const s = _roundedPath(_toward(pts, _centroid(pts), gap), radius);
+  return `<path d="${s}" fill="${color}"/><path d="${s}" fill="url(#netbev)"/>`;
+}
+
 function renderPyraminx(state) {
   const h = Math.sqrt(3); // height of a side-2 equilateral triangle
   const P_T = [1, 0], P_BL = [0, h], P_BR = [2, h];
@@ -297,18 +334,23 @@ function renderPyraminx(state) {
   // Net = one big triangle split into 4: center face inverted, 3 faces at corners.
   // Corner net-points per face [A, B, C] chosen so shared edges (and colors) align.
   const FP = { U: [M_L, M_R, M_B], L: [P_BR, M_R, M_B], R: [P_BL, M_L, M_B], B: [P_T, M_L, M_R] };
-  let polys = "";
+  const faceSep = 0.9, stickGap = 0.84, radius = 0.05;
+  let bg = "", fg = "";
   PYRA_FACES.forEach((f, fi) => {
     const [A, B, C] = FP[f];
+    const fc = _centroid([A, B, C]);
+    // dark face backing (rounded triangle), shrunk to separate faces from each other
+    bg += `<path d="${_roundedPath(_toward([A, B, C], fc, faceSep), 0.08)}" fill="#0d0b12"/>`;
     for (let li = 0; li < 9; li++) {
-      const pts = PYRA_TRIS[li].map(([i, j, k]) =>
-        `${((i * A[0] + j * B[0] + k * C[0]) / 3).toFixed(3)},${((i * A[1] + j * B[1] + k * C[1]) / 3).toFixed(3)}`
-      ).join(" ");
-      polys += `<polygon points="${pts}" fill="${PYRA_COLORS[state[fi * 9 + li]]}" stroke="#0d0b12" stroke-width="0.05" stroke-linejoin="round"/>`;
+      let pts = PYRA_TRIS[li].map(([i, j, k]) =>
+        [(i * A[0] + j * B[0] + k * C[0]) / 3, (i * A[1] + j * B[1] + k * C[1]) / 3]);
+      pts = _toward(pts, fc, faceSep); // move into the separated face
+      fg += _sticker(pts, PYRA_COLORS[state[fi * 9 + li]], stickGap, radius);
     }
   });
-  return `<div class="pzl-net" style="aspect-ratio:${(2 / h).toFixed(4)}">` +
-    `<svg viewBox="-0.07 -0.07 ${(2 + 0.14).toFixed(2)} ${(h + 0.14).toFixed(3)}" preserveAspectRatio="xMidYMid meet">${polys}</svg></div>`;
+  const W = 2, H = h;
+  return `<div class="pzl-net" style="aspect-ratio:${(W / H).toFixed(4)}">` +
+    `<svg viewBox="-0.1 -0.1 ${(W + 0.2).toFixed(2)} ${(H + 0.2).toFixed(3)}" preserveAspectRatio="xMidYMid meet">${NET_BEVEL}${bg}${fg}</svg></div>`;
 }
 
 // --- Skewb: 6 faces, 5 facelets each (index = face*5 + [center,TL,TR,BR,BL]) ---
@@ -336,18 +378,21 @@ function renderSkewb(state) {
     [[1,1],[0.5,1],[1,0.5]],           // BR
     [[0,1],[0,0.5],[0.5,1]],           // BL
   ];
-  let polys = "";
+  const stickGap = 0.86, radius = 0.06;
+  let bg = "", fg = "";
   SKEWB_FACES.forEach((f, fi) => {
     const [c, r] = pos[f];
     const ox = c * step, oy = r * step;
+    // dark rounded face backing (like a cube net face)
+    bg += `<rect x="${ox.toFixed(3)}" y="${oy.toFixed(3)}" width="1" height="1" rx="0.09" fill="#0d0b12"/>`;
     for (let s = 0; s < 5; s++) {
-      const pts = shapes[s].map(([x, y]) => `${(ox + x).toFixed(3)},${(oy + y).toFixed(3)}`).join(" ");
-      polys += `<polygon points="${pts}" fill="${CUBE_COLORS[state[fi * 5 + s]]}" stroke="#0d0b12" stroke-width="0.055" stroke-linejoin="round"/>`;
+      const pts = shapes[s].map(([x, y]) => [ox + x, oy + y]);
+      fg += _sticker(pts, CUBE_COLORS[state[fi * 5 + s]], stickGap, radius);
     }
   });
   const W = 4 + 3 * gap, H = 3 + 2 * gap;
   return `<div class="pzl-net" style="aspect-ratio:${(W / H).toFixed(4)}">` +
-    `<svg viewBox="0 0 ${W.toFixed(2)} ${H.toFixed(2)}" preserveAspectRatio="xMidYMid meet">${polys}</svg></div>`;
+    `<svg viewBox="-0.05 -0.05 ${(W + 0.1).toFixed(2)} ${(H + 0.1).toFixed(2)}" preserveAspectRatio="xMidYMid meet">${NET_BEVEL}${bg}${fg}</svg></div>`;
 }
 
 // ---------- Time formatting ----------
