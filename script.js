@@ -259,7 +259,10 @@ function stateFromScramble(text, moves, solved) {
 
 // --- Pyraminx: 4 triangular faces, 9 facelets each (index = face*9 + local) ---
 const PYRA_FACES = ["U", "L", "R", "B"];
-const PYRA_COLORS = { U: "#12a150", L: "#1466c4", R: "#d1332b", B: "#ffd21a" };
+// Oriented for the WCA holding convention — green front, yellow bottom, red left,
+// blue right — so the preview matches a scramble done in that orientation. Verified
+// in Python: a clockwise U sends the front (green) tip onto the left (red) face.
+const PYRA_COLORS = { U: "#ffd21a", L: "#1466c4", R: "#d1332b", B: "#12a150" };
 const PYRA_MOVES = {
   U: [0,1,2,3,4,5,6,7,8,18,21,20,19,13,14,15,16,17,27,30,29,28,22,23,24,25,26,9,10,11,12,31,32,33,34,35],
   u: [0,1,2,3,4,5,6,7,8,18,10,11,12,13,14,15,16,17,27,19,20,21,22,23,24,25,26,9,28,29,30,31,32,33,34,35],
