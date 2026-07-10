@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=23" />
+  <link rel="stylesheet" href="style.css?v=24" />
 </head>
 <body>
   <!-- Stats page link -->
@@ -25,6 +25,37 @@
     <div class="modal" role="dialog" aria-modal="true">
       <button class="modal-close" id="settings-close" type="button" aria-label="Close">×</button>
       <h2 class="modal-title">Options</h2>
+
+      <div class="opt-group">
+        <span class="opt-group-label">Theme</span>
+        <div class="theme-row">
+          <label class="theme-field">
+            Base
+            <select class="theme-select" id="surface-select">
+              <option value="charcoal">Charcoal</option>
+              <option value="slate">Slate</option>
+              <option value="warm">Warm</option>
+              <option value="midnight">Midnight</option>
+              <option value="light">Light</option>
+            </select>
+          </label>
+          <label class="theme-field">
+            Accent
+            <div class="accent-row">
+              <select class="theme-select" id="accent-select">
+                <option value="green">Green</option>
+                <option value="blue">Blue</option>
+                <option value="violet">Violet</option>
+                <option value="rose">Rose</option>
+                <option value="amber">Amber</option>
+                <option value="teal">Teal</option>
+                <option value="custom">Custom</option>
+              </select>
+              <input type="color" class="accent-color" id="accent-color" title="Custom accent color" aria-label="Custom accent color" />
+            </div>
+          </label>
+        </div>
+      </div>
 
       <div class="opt-group">
         <span class="opt-group-label">Input</span>
@@ -185,6 +216,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=21"></script>
+  <script src="script.js?v=22"></script>
 </body>
 </html>

@@ -1,3 +1,16 @@
+// ---------- Theme (shared with the timer page via localStorage settings) ----------
+(function applyStoredTheme() {
+  let s = {};
+  try { s = JSON.parse(localStorage.getItem("cube-timer-settings") || "{}"); } catch { /* ignore */ }
+  const root = document.documentElement;
+  if (s.surface && s.surface !== "charcoal") root.dataset.surface = s.surface;
+  if (s.accent === "custom" && s.customAccent) {
+    root.style.setProperty("--ready", s.customAccent);
+  } else if (s.accent && s.accent !== "green") {
+    root.dataset.accent = s.accent;
+  }
+})();
+
 // ---------- Shared config ----------
 const PUZZLES = [
   { id: "222", name: "2x2" }, { id: "333", name: "3x3" }, { id: "444", name: "4x4" },

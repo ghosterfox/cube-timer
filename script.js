@@ -476,6 +476,9 @@ const pbAo12El = document.getElementById("pb-ao12");
 const pbAveragesEl = document.getElementById("pb-averages");
 const pbAvgMo3El = document.getElementById("pb-avg-mo3");
 const optShowMo3 = document.getElementById("opt-show-mo3");
+const surfaceSelect = document.getElementById("surface-select");
+const accentSelect = document.getElementById("accent-select");
+const accentColor = document.getElementById("accent-color");
 const solveListEl = document.getElementById("solve-list");
 const solveColsEl = document.getElementById("solve-cols");
 const solveEmptyEl = document.getElementById("solve-empty");
@@ -525,7 +528,18 @@ const HOLD_MS = 500; // must hold Space this long before the timer arms
 
 // ---------- Settings ----------
 const SETTINGS_KEY = "cube-timer-settings";
-const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showMo3: true, showAo50: false, showAo100: false, manualEntry: false };
+const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showMo3: true, showAo50: false, showAo100: false, manualEntry: false, surface: "charcoal", accent: "green", customAccent: "#26d366" };
+
+// Preset accent hex (mirrors the [data-accent] CSS) so the color picker can
+// reflect the active accent, and so themes can be applied on other pages.
+const ACCENT_HEX = { green: "#26d366", blue: "#38bdf8", violet: "#a78bfa", rose: "#fb6f92", amber: "#ff9f43", teal: "#2dd4bf" };
+
+// Old single-key colorways -> new surface + accent pair.
+const THEME_MIGRATE = {
+  default: ["charcoal", "green"], ocean: ["slate", "blue"], violet: ["charcoal", "violet"],
+  rose: ["charcoal", "rose"], ember: ["warm", "amber"], mint: ["charcoal", "teal"],
+};
+
 let settings = loadSettings();
 
 function loadSettings() {
@@ -534,6 +548,10 @@ function loadSettings() {
     const parsed = raw ? JSON.parse(raw) : {};
     // Migrate the old combined "showBig" toggle to the two separate ones.
     if (parsed.showBig) { parsed.showAo50 = true; parsed.showAo100 = true; }
+    // Migrate the old single "theme" to surface + accent.
+    if (parsed.theme && !parsed.surface && THEME_MIGRATE[parsed.theme]) {
+      [parsed.surface, parsed.accent] = THEME_MIGRATE[parsed.theme];
+    }
     return { ...DEFAULT_SETTINGS, ...parsed };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -1292,6 +1310,33 @@ dataImportInput.addEventListener("change", () => {
 
 // ---------- Options menu (modal) ----------
 // Show/hide the Ao50 and Ao100 cards independently, and size the grid to fit.
+// Apply the chosen surface + accent (data attributes on <html>). The defaults
+// (charcoal / green) live in :root, so they use no attribute. A "custom" accent
+// sets --ready/--accent2 inline from settings.customAccent.
+function applyTheme() {
+  const root = document.documentElement;
+  const surface = settings.surface || "charcoal";
+  const accent = settings.accent || "green";
+
+  if (surface === "charcoal") root.removeAttribute("data-surface");
+  else root.dataset.surface = surface;
+
+  if (accent === "custom") {
+    root.removeAttribute("data-accent");
+    root.style.setProperty("--ready", settings.customAccent);
+    root.style.setProperty("--accent2", settings.customAccent);
+  } else {
+    root.style.removeProperty("--ready");
+    root.style.removeProperty("--accent2");
+    if (accent === "green") root.removeAttribute("data-accent");
+    else root.dataset.accent = accent;
+  }
+
+  surfaceSelect.value = surface;
+  accentSelect.value = accent;
+  accentColor.value = accent === "custom" ? settings.customAccent : (ACCENT_HEX[accent] || "#26d366");
+}
+
 function applyStatCols() {
   statGrid.classList.toggle("show-mo3", settings.showMo3);
   statGrid.classList.toggle("show-ao50", settings.showAo50);
@@ -1345,6 +1390,7 @@ optShowMo3.checked = settings.showMo3;
 optShowAo50.checked = settings.showAo50;
 optShowAo100.checked = settings.showAo100;
 applyStatCols();
+applyTheme();
 applyManualMode();
 
 settingsToggle.addEventListener("click", () => {
@@ -1377,6 +1423,25 @@ optShowMo3.addEventListener("change", () => {
   settings.showMo3 = optShowMo3.checked;
   saveSettings();
   applyStatCols();
+});
+
+surfaceSelect.addEventListener("change", () => {
+  settings.surface = surfaceSelect.value;
+  saveSettings();
+  applyTheme();
+});
+
+accentSelect.addEventListener("change", () => {
+  settings.accent = accentSelect.value;
+  saveSettings();
+  applyTheme();
+});
+
+accentColor.addEventListener("input", () => {
+  settings.accent = "custom";
+  settings.customAccent = accentColor.value;
+  saveSettings();
+  applyTheme();
 });
 
 optShowAo50.addEventListener("change", () => {
