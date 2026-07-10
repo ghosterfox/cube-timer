@@ -17,32 +17,38 @@
   --series-2: #d95926;
 }
 
-/* ---------- Surfaces (shared with the timer page via data-surface) ---------- */
-[data-surface="slate"] {
+/* ---------- Colorways (shared with the timer page via data-theme) ---------- */
+[data-theme="ocean"] {
   --bg: #0f151c; --panel: #172230; --card: #1d2a3a; --card-2: #223245;
   --border: #2c3f56; --border-strong: #3d5470; --fg: #eef4fb; --muted: #8fa3bb;
+  --ready: #38bdf8;
 }
-[data-surface="warm"] {
+[data-theme="violet"] {
+  --bg: #15121f; --panel: #1f1a2e; --card: #271f3a; --card-2: #2d2444;
+  --border: #3a2f57; --border-strong: #4f4177; --fg: #f2eefb; --muted: #a396bf;
+  --ready: #a78bfa;
+}
+[data-theme="rose"] {
+  --bg: #1a1016; --panel: #271722; --card: #31202c; --card-2: #3a2634;
+  --border: #4a3040; --border-strong: #64425a; --fg: #fbeef4; --muted: #bf94a8;
+  --ready: #fb6f92;
+}
+[data-theme="ember"] {
   --bg: #17130d; --panel: #241d13; --card: #2d2418; --card-2: #362b1d;
   --border: #443626; --border-strong: #5f4c34; --fg: #f8f0e6; --muted: #b8a488;
+  --ready: #ff9f43;
 }
-[data-surface="midnight"] {
-  --bg: #0b0d12; --panel: #12151d; --card: #171b25; --card-2: #1c212d;
-  --border: #262c3a; --border-strong: #38404f; --fg: #eef1f7; --muted: #8b93a5;
+[data-theme="mint"] {
+  --bg: #101816; --panel: #172420; --card: #1d2e28; --card-2: #223730;
+  --border: #2c463d; --border-strong: #3d6155; --fg: #eafaf4; --muted: #92b3a7;
+  --ready: #2dd4bf;
 }
-[data-surface="light"] {
+[data-theme="light"] {
   --bg: #eceef2; --panel: #f7f8fa; --card: #ffffff; --card-2: #fbfcfd;
   --border: #dee1e7; --border-strong: #c2c7d0; --fg: #1b1d24; --muted: #6b7280;
-  --grid: rgba(0, 0, 0, 0.08);
-  --axis: rgba(0, 0, 0, 0.22);
+  --grid: rgba(0, 0, 0, 0.08); --axis: rgba(0, 0, 0, 0.22);
+  --ready: #16a34a;
 }
-
-/* ---------- Accents (shared via data-accent) ---------- */
-[data-accent="blue"]   { --ready: #38bdf8; }
-[data-accent="violet"] { --ready: #a78bfa; }
-[data-accent="rose"]   { --ready: #fb6f92; }
-[data-accent="amber"]  { --ready: #ff9f43; }
-[data-accent="teal"]   { --ready: #2dd4bf; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 

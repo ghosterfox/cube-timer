@@ -3,11 +3,11 @@
   let s = {};
   try { s = JSON.parse(localStorage.getItem("cube-timer-settings") || "{}"); } catch { /* ignore */ }
   const root = document.documentElement;
-  if (s.surface && s.surface !== "charcoal") root.dataset.surface = s.surface;
-  if (s.accent === "custom" && s.customAccent) {
+  const t = s.theme || (s.accent ? (s.surface === "light" ? "light" : { blue: "ocean", violet: "violet", rose: "rose", amber: "ember", teal: "mint" }[s.accent]) : null);
+  if (t === "custom" && s.customAccent) {
     root.style.setProperty("--ready", s.customAccent);
-  } else if (s.accent && s.accent !== "green") {
-    root.dataset.accent = s.accent;
+  } else if (t && t !== "green") {
+    root.dataset.theme = t;
   }
 })();
 
@@ -126,6 +126,27 @@ function renderKPIs(solves) {
 }
 
 // ---------- Progression chart ----------
+// Smooth path through points via Catmull-Rom -> cubic Bézier. `k` is the tension
+// (1/6 = standard smooth; smaller hugs the data more, less overshoot).
+function smoothPath(pts, k) {
+  k = k == null ? 1 / 6 : k;
+  const n = pts.length;
+  if (n < 2) return n ? `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}` : "";
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) * k;
+    const c1y = p1[1] + (p2[1] - p0[1]) * k;
+    const c2x = p2[0] - (p3[0] - p1[0]) * k;
+    const c2y = p2[1] - (p3[1] - p1[1]) * k;
+    d += `C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
 function renderProgression(solves) {
   const plot = document.getElementById("prog-plot");
   const pts = [];
@@ -169,11 +190,11 @@ function renderProgression(solves) {
     svg += `<text x="${x(i).toFixed(1)}" y="${H - 10}" fill="var(--muted)" font-size="12" font-weight="700" text-anchor="middle">${i + 1}</text>`;
   }
 
-  // raw line
-  const rawPath = pts.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  // raw line (gently smoothed so the noise doesn't overshoot)
+  const rawPath = smoothPath(pts.map((v, i) => [x(i), y(v)]), 0.1);
   svg += `<path d="${rawPath}" fill="none" stroke="var(--series-1)" stroke-width="1.5" stroke-opacity="0.55" stroke-linejoin="round"/>`;
-  // trend line
-  const trPath = trend.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  // trend line (fully curved)
+  const trPath = smoothPath(trend.map((v, i) => [x(i), y(v)]));
   svg += `<path d="${trPath}" fill="none" stroke="var(--series-2)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
   // raw dots (only when not too dense)
   if (n <= 80) {
@@ -261,7 +282,7 @@ function renderDistribution(solves) {
     const h = M.t + PH - top;
     if (h <= 0) return;
     const rr = Math.min(4, bwPx / 2, h);
-    svg += `<path d="M${bx.toFixed(1)},${(M.t + PH).toFixed(1)} V${(top + rr).toFixed(1)} Q${bx.toFixed(1)},${top.toFixed(1)} ${(bx + rr).toFixed(1)},${top.toFixed(1)} H${(bx + bwPx - rr).toFixed(1)} Q${(bx + bwPx).toFixed(1)},${top.toFixed(1)} ${(bx + bwPx).toFixed(1)},${(top + rr).toFixed(1)} V${(M.t + PH).toFixed(1)} Z" fill="var(--series-1)"/>`;
+    svg += `<path d="M${bx.toFixed(1)},${(M.t + PH).toFixed(1)} V${(top + rr).toFixed(1)} Q${bx.toFixed(1)},${top.toFixed(1)} ${(bx + rr).toFixed(1)},${top.toFixed(1)} H${(bx + bwPx - rr).toFixed(1)} Q${(bx + bwPx).toFixed(1)},${top.toFixed(1)} ${(bx + bwPx).toFixed(1)},${(top + rr).toFixed(1)} V${(M.t + PH).toFixed(1)} Z" fill="var(--ready)"/>`;
   });
   // x labels at bucket boundaries (every other if crowded)
   const lblStep = nb > 8 ? 2 : 1;

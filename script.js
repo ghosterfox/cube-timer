@@ -463,6 +463,12 @@ const scrambleEl = document.getElementById("scramble");
 const timerEl = document.getElementById("timer");
 const hintEl = document.getElementById("hint");
 const newScrambleBtn = document.getElementById("new-scramble");
+const copyScrambleBtn = document.getElementById("copy-scramble");
+const editScrambleBtn = document.getElementById("edit-scramble");
+const scrambleEditModal = document.getElementById("scramble-edit-modal");
+const scrambleEditInput = document.getElementById("scramble-edit-input");
+const scrambleEditApply = document.getElementById("scramble-edit-apply");
+const scrambleEditClose = document.getElementById("scramble-edit-close");
 const bestEl = document.getElementById("stat-best");
 const ao5El = document.getElementById("stat-ao5");
 const ao12El = document.getElementById("stat-ao12");
@@ -476,8 +482,7 @@ const pbAo12El = document.getElementById("pb-ao12");
 const pbAveragesEl = document.getElementById("pb-averages");
 const pbAvgMo3El = document.getElementById("pb-avg-mo3");
 const optShowMo3 = document.getElementById("opt-show-mo3");
-const surfaceSelect = document.getElementById("surface-select");
-const accentSelect = document.getElementById("accent-select");
+const themeSelect = document.getElementById("theme-select");
 const accentColor = document.getElementById("accent-color");
 const solveListEl = document.getElementById("solve-list");
 const solveColsEl = document.getElementById("solve-cols");
@@ -488,7 +493,9 @@ const previewEl = document.getElementById("preview");
 const settingsToggle = document.getElementById("settings-toggle");
 const settingsPanel = document.getElementById("settings-panel");
 const optHideUI = document.getElementById("opt-hide-ui");
-const optHideTimer = document.getElementById("opt-hide-timer");
+const optInspection = document.getElementById("opt-inspection");
+const optRunningDisplay = document.getElementById("opt-running-display");
+const optTimerFont = document.getElementById("opt-timer-font");
 const optManual = document.getElementById("opt-manual");
 const manualInput = document.getElementById("manual-input");
 const optShowAo50 = document.getElementById("opt-show-ao50");
@@ -518,7 +525,7 @@ const dockPreview = document.querySelector(".dock-preview");
 // "holding" -> space pressed, charging the hold delay (red, not armed yet)
 // "ready"   -> held long enough, timer armed (green)
 // "running" -> timer counting
-const STATE = { IDLE: "idle", HOLDING: "holding", READY: "ready", RUNNING: "running" };
+const STATE = { IDLE: "idle", INSPECTING: "inspecting", HOLDING: "holding", READY: "ready", RUNNING: "running" };
 let state = STATE.IDLE;
 let startTime = 0;
 let rafId = null;
@@ -526,18 +533,22 @@ let currentScramble = "";
 let holdTimeout = null;
 const HOLD_MS = 500; // must hold Space this long before the timer arms
 
+// WCA inspection
+const INSPECT_SEC = 15;
+let inspecting = false;
+let inspectionStart = 0;
+let inspectionRaf = null;
+let inspectionPenalty = null; // "+2" | "DNF" | null, applied to the resulting solve
+
 // ---------- Settings ----------
 const SETTINGS_KEY = "cube-timer-settings";
-const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showMo3: true, showAo50: false, showAo100: false, manualEntry: false, surface: "charcoal", accent: "green", customAccent: "#26d366" };
+const DEFAULT_SETTINGS = { hideUI: true, inspection: false, runningDisplay: "full", timerFont: "digital", showMo3: true, showAo50: false, showAo100: false, manualEntry: false, theme: "green", customAccent: "#26d366" };
 
-// Preset accent hex (mirrors the [data-accent] CSS) so the color picker can
-// reflect the active accent, and so themes can be applied on other pages.
-const ACCENT_HEX = { green: "#26d366", blue: "#38bdf8", violet: "#a78bfa", rose: "#fb6f92", amber: "#ff9f43", teal: "#2dd4bf" };
-
-// Old single-key colorways -> new surface + accent pair.
-const THEME_MIGRATE = {
-  default: ["charcoal", "green"], ocean: ["slate", "blue"], violet: ["charcoal", "violet"],
-  rose: ["charcoal", "rose"], ember: ["warm", "amber"], mint: ["charcoal", "teal"],
+// Each colorway's accent hex, so the picker reflects the active theme and other
+// pages can render it.
+const THEME_ACCENT_HEX = {
+  green: "#26d366", ocean: "#38bdf8", violet: "#a78bfa", rose: "#fb6f92",
+  ember: "#ff9f43", mint: "#2dd4bf", light: "#16a34a",
 };
 
 let settings = loadSettings();
@@ -548,9 +559,14 @@ function loadSettings() {
     const parsed = raw ? JSON.parse(raw) : {};
     // Migrate the old combined "showBig" toggle to the two separate ones.
     if (parsed.showBig) { parsed.showAo50 = true; parsed.showAo100 = true; }
-    // Migrate the old single "theme" to surface + accent.
-    if (parsed.theme && !parsed.surface && THEME_MIGRATE[parsed.theme]) {
-      [parsed.surface, parsed.accent] = THEME_MIGRATE[parsed.theme];
+    // Migrate the old "hide timer during solve" boolean to the display dropdown.
+    if (parsed.hideTimer === true && parsed.runningDisplay === undefined) parsed.runningDisplay = "hidden";
+    // Migrate the old default theme name.
+    if (parsed.theme === "default") parsed.theme = "green";
+    // Migrate the short-lived split surface/accent model back to a single theme.
+    if (parsed.theme === undefined && parsed.accent) {
+      parsed.theme = parsed.surface === "light" ? "light"
+        : ({ green: "green", blue: "ocean", violet: "violet", rose: "rose", amber: "ember", teal: "mint", custom: "custom" }[parsed.accent] || "green");
     }
     return { ...DEFAULT_SETTINGS, ...parsed };
   } catch {
@@ -936,26 +952,95 @@ function closeScrambleModal() {
 }
 
 // ---------- Timer loop ----------
+// Whole seconds only (no centiseconds), with minutes once >= 60s.
+function formatSeconds(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return String(s);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 function tick() {
   const elapsed = performance.now() - startTime;
-  timerEl.textContent = formatTime(elapsed);
+  timerEl.textContent = settings.runningDisplay === "seconds" ? formatSeconds(elapsed) : formatTime(elapsed);
   rafId = requestAnimationFrame(tick);
 }
 
 function startTimer() {
+  // If inspecting, lock in the inspection penalty before the solve starts.
+  if (inspecting) {
+    const inspEl = (performance.now() - inspectionStart) / 1000;
+    inspectionPenalty = inspEl > 17 ? "DNF" : inspEl > INSPECT_SEC ? "+2" : null;
+    endInspection();
+  }
   state = STATE.RUNNING;
-  timerEl.classList.remove("ready");
+  timerEl.classList.remove("ready", "insp", "insp-warn", "insp-danger");
   timerEl.classList.add("running");
   hintEl.textContent = "Press Space to stop";
   startTime = performance.now();
 
-  if (settings.hideTimer) {
+  if (settings.runningDisplay === "hidden") {
     // Show the "solve" label instead of the ticking time.
     timerEl.textContent = "solve";
     timerEl.classList.add("solve-label");
   } else {
+    timerEl.classList.remove("solve-label");
     rafId = requestAnimationFrame(tick);
   }
+}
+
+function idleHintText() {
+  return settings.inspection ? "Press Space to inspect" : "Press and hold Space to get ready";
+}
+
+// ---------- WCA inspection ----------
+function startInspection() {
+  state = STATE.INSPECTING;
+  inspecting = true;
+  inspectionPenalty = null;
+  inspectionStart = performance.now();
+  timerEl.classList.remove("running", "solve-label", "holding", "ready");
+  timerEl.classList.add("insp");
+  hintEl.textContent = "Inspecting — hold Space when ready";
+  cancelAnimationFrame(inspectionRaf);
+  inspectionRaf = requestAnimationFrame(inspectionTick);
+}
+
+function inspectionTick() {
+  if (!inspecting) return;
+  if (state === STATE.INSPECTING) {
+    const elapsed = (performance.now() - inspectionStart) / 1000;
+    const over = elapsed > INSPECT_SEC;
+    // "+2"/"DNF" need a real font, digits can use the seven-seg one.
+    timerEl.classList.toggle("solve-label", over);
+    timerEl.classList.toggle("insp-warn", elapsed >= 8 && elapsed < 12);
+    timerEl.classList.toggle("insp-danger", elapsed >= 12);
+    timerEl.textContent = over
+      ? (elapsed > 17 ? "DNF" : "+2")
+      : String(Math.max(1, Math.ceil(INSPECT_SEC - elapsed)));
+  }
+  inspectionRaf = requestAnimationFrame(inspectionTick);
+}
+
+function endInspection() {
+  inspecting = false;
+  cancelAnimationFrame(inspectionRaf);
+  timerEl.classList.remove("insp", "insp-warn", "insp-danger");
+}
+
+function cancelInspection() {
+  endInspection();
+  state = STATE.IDLE;
+  timerEl.classList.remove("holding", "ready", "solve-label");
+  timerEl.textContent = "0.00";
+  hintEl.textContent = idleHintText();
+}
+
+// Timer font (data-timer-font on <html>); Digital (DSEG7) is the default.
+function applyTimerFont() {
+  const f = settings.timerFont || "digital";
+  if (f === "digital") document.documentElement.removeAttribute("data-timer-font");
+  else document.documentElement.dataset.timerFont = f;
+  optTimerFont.value = f;
 }
 
 function stopTimer() {
@@ -965,7 +1050,7 @@ function stopTimer() {
   timerEl.textContent = formatTime(elapsed);
   state = STATE.IDLE;
   document.body.classList.remove("solving");
-  hintEl.textContent = "Press and hold Space to get ready";
+  hintEl.textContent = idleHintText();
   recordSolve(elapsed);
   newScramble();
 }
@@ -973,7 +1058,7 @@ function stopTimer() {
 // Space pressed: start charging the hold delay (red) — not armed yet.
 function beginHold() {
   state = STATE.HOLDING;
-  timerEl.classList.remove("ready");
+  timerEl.classList.remove("ready", "insp", "insp-warn", "insp-danger", "solve-label");
   timerEl.classList.add("holding");
   timerEl.textContent = "0.00";
   hintEl.textContent = "Keep holding…";
@@ -991,28 +1076,39 @@ function armTimer() {
   if (settings.hideUI) document.body.classList.add("solving");
 }
 
-// Released before arming: cancel, nothing starts.
+// Released before arming: cancel. Returns to inspection if it was running.
 function cancelHold() {
   clearTimeout(holdTimeout);
   holdTimeout = null;
-  state = STATE.IDLE;
   timerEl.classList.remove("holding");
-  hintEl.textContent = "Press and hold Space to get ready";
+  if (inspecting) {
+    state = STATE.INSPECTING;
+    timerEl.classList.add("insp");
+    hintEl.textContent = "Inspecting — hold Space when ready";
+  } else {
+    state = STATE.IDLE;
+    hintEl.textContent = idleHintText();
+  }
 }
 
 // ---------- Solves ----------
 function recordSolve(ms) {
+  // A pending inspection penalty (if any) applies to this solve.
+  const penalty = inspectionPenalty;
+  inspectionPenalty = null;
+
   // Best among prior (non-DNF) solves, to detect a new PB.
   const prior = solves.filter((s) => s.penalty !== "DNF").map(effectiveTime);
   const prevBest = prior.length ? Math.min(...prior) : Infinity;
   const hadPrior = solves.length > 0;
 
-  solves.push({ time: ms, penalty: null, scramble: currentScramble, date: new Date().toISOString() });
+  solves.push({ time: ms, penalty, scramble: currentScramble, date: new Date().toISOString() });
   saveSolves();
   render();
 
   // Celebrate beating a previous personal best (not the very first solve).
-  if (hadPrior && ms < prevBest) fireConfetti();
+  const eff = penalty === "DNF" ? Infinity : ms + (penalty === "+2" ? 2000 : 0);
+  if (hadPrior && eff < prevBest) fireConfetti();
 }
 
 // ---------- Confetti (self-contained canvas burst) ----------
@@ -1225,20 +1321,25 @@ document.addEventListener("keydown", (e) => {
   // Escape closes an open modal.
   if (e.key === "Escape") {
     if (!scrambleModal.hidden) { closeScrambleModal(); return; }
+    if (!scrambleEditModal.hidden) { closeScrambleEdit(); return; }
     if (!settingsPanel.hidden) { closeSettings(); return; }
+    if (inspecting) { cancelInspection(); return; } // bail out of inspection
   }
   if (e.code !== "Space") return;
   if (settings.manualEntry) return; // manual entry uses the text box, not the timer
   const active = document.activeElement;
   if (active && /^(INPUT|SELECT|TEXTAREA)$/.test(active.tagName)) return;
-  if (!scrambleModal.hidden || !settingsPanel.hidden) return; // don't arm behind a modal
+  if (!scrambleModal.hidden || !settingsPanel.hidden || !scrambleEditModal.hidden) return; // don't arm behind a modal
   e.preventDefault();
   if (e.repeat) return; // ignore auto-repeat while holding
 
   if (state === STATE.RUNNING) {
     stopTimer();
   } else if (state === STATE.IDLE) {
-    beginHold();
+    if (settings.inspection) startInspection();
+    else beginHold();
+  } else if (state === STATE.INSPECTING) {
+    beginHold(); // charge the hold to arm while the inspection clock keeps running
   }
 });
 
@@ -1253,10 +1354,89 @@ document.addEventListener("keyup", (e) => {
   }
 });
 
+// ---------- Copy / manual scramble ----------
+let toastTimer = null;
+function toast(msg) {
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    el.className = "toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 1500);
+}
+
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      resolve();
+    } catch (e) { reject(e); }
+  });
+}
+
+function openScrambleEdit() {
+  scrambleEditInput.value = currentScramble;
+  scrambleEditModal.hidden = false;
+  setTimeout(() => scrambleEditInput.focus(), 0);
+}
+
+function closeScrambleEdit() { scrambleEditModal.hidden = true; }
+
+// Apply a pasted/typed scramble as the current one (with its preview).
+function applyManualScramble() {
+  const text = scrambleEditInput.value.trim();
+  if (!text) { closeScrambleEdit(); return; }
+  currentScramble = text;
+  scrambleEl.innerHTML = scrambleToHTML(text);
+  let preview = null;
+  try { preview = previewForScramble(text, currentPuzzle); } catch { preview = null; }
+  previewEl.innerHTML =
+    preview || `<div class="no-preview">No preview<span>couldn't read that scramble</span></div>`;
+  closeScrambleEdit();
+}
+
 // ---------- UI events ----------
 newScrambleBtn.addEventListener("click", () => {
   newScramble();
   newScrambleBtn.blur(); // keep Space bound to the timer, not the button
+});
+
+copyScrambleBtn.addEventListener("click", () => {
+  if (!currentScramble) return;
+  copyText(currentScramble).then(
+    () => {
+      copyScrambleBtn.classList.add("copied");
+      setTimeout(() => copyScrambleBtn.classList.remove("copied"), 900);
+      toast("Scramble copied");
+    },
+    () => toast("Copy failed")
+  );
+  copyScrambleBtn.blur();
+});
+
+editScrambleBtn.addEventListener("click", () => { openScrambleEdit(); editScrambleBtn.blur(); });
+scrambleEditApply.addEventListener("click", applyManualScramble);
+scrambleEditClose.addEventListener("click", closeScrambleEdit);
+scrambleEditModal.addEventListener("click", (e) => {
+  if (e.target === scrambleEditModal) closeScrambleEdit();
+});
+scrambleEditInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); applyManualScramble(); }
 });
 
 // Click the dock preview to enlarge the current scramble.
@@ -1310,31 +1490,25 @@ dataImportInput.addEventListener("change", () => {
 
 // ---------- Options menu (modal) ----------
 // Show/hide the Ao50 and Ao100 cards independently, and size the grid to fit.
-// Apply the chosen surface + accent (data attributes on <html>). The defaults
-// (charcoal / green) live in :root, so they use no attribute. A "custom" accent
-// sets --ready/--accent2 inline from settings.customAccent.
+// Apply the chosen colorway (data-theme on <html>). Green is the :root default
+// (no attribute); Custom sets --ready/--accent2 inline from settings.customAccent.
 function applyTheme() {
   const root = document.documentElement;
-  const surface = settings.surface || "charcoal";
-  const accent = settings.accent || "green";
+  const t = settings.theme || "green";
 
-  if (surface === "charcoal") root.removeAttribute("data-surface");
-  else root.dataset.surface = surface;
-
-  if (accent === "custom") {
-    root.removeAttribute("data-accent");
+  if (t === "custom") {
+    root.removeAttribute("data-theme");
     root.style.setProperty("--ready", settings.customAccent);
     root.style.setProperty("--accent2", settings.customAccent);
   } else {
     root.style.removeProperty("--ready");
     root.style.removeProperty("--accent2");
-    if (accent === "green") root.removeAttribute("data-accent");
-    else root.dataset.accent = accent;
+    if (t === "green") root.removeAttribute("data-theme");
+    else root.dataset.theme = t;
   }
 
-  surfaceSelect.value = surface;
-  accentSelect.value = accent;
-  accentColor.value = accent === "custom" ? settings.customAccent : (ACCENT_HEX[accent] || "#26d366");
+  themeSelect.value = t;
+  accentColor.value = t === "custom" ? settings.customAccent : (THEME_ACCENT_HEX[t] || "#26d366");
 }
 
 function applyStatCols() {
@@ -1384,14 +1558,17 @@ manualInput.addEventListener("keydown", (e) => {
 });
 
 optHideUI.checked = settings.hideUI;
-optHideTimer.checked = settings.hideTimer;
+optInspection.checked = settings.inspection;
+optRunningDisplay.value = settings.runningDisplay;
 optManual.checked = settings.manualEntry;
 optShowMo3.checked = settings.showMo3;
 optShowAo50.checked = settings.showAo50;
 optShowAo100.checked = settings.showAo100;
 applyStatCols();
 applyTheme();
+applyTimerFont();
 applyManualMode();
+hintEl.textContent = idleHintText();
 
 settingsToggle.addEventListener("click", () => {
   settingsPanel.hidden = false;
@@ -1408,9 +1585,21 @@ optHideUI.addEventListener("change", () => {
   saveSettings();
 });
 
-optHideTimer.addEventListener("change", () => {
-  settings.hideTimer = optHideTimer.checked;
+optInspection.addEventListener("change", () => {
+  settings.inspection = optInspection.checked;
   saveSettings();
+  if (state === STATE.IDLE) hintEl.textContent = idleHintText();
+});
+
+optRunningDisplay.addEventListener("change", () => {
+  settings.runningDisplay = optRunningDisplay.value;
+  saveSettings();
+});
+
+optTimerFont.addEventListener("change", () => {
+  settings.timerFont = optTimerFont.value;
+  saveSettings();
+  applyTimerFont();
 });
 
 optManual.addEventListener("change", () => {
@@ -1425,20 +1614,14 @@ optShowMo3.addEventListener("change", () => {
   applyStatCols();
 });
 
-surfaceSelect.addEventListener("change", () => {
-  settings.surface = surfaceSelect.value;
-  saveSettings();
-  applyTheme();
-});
-
-accentSelect.addEventListener("change", () => {
-  settings.accent = accentSelect.value;
+themeSelect.addEventListener("change", () => {
+  settings.theme = themeSelect.value;
   saveSettings();
   applyTheme();
 });
 
 accentColor.addEventListener("input", () => {
-  settings.accent = "custom";
+  settings.theme = "custom";
   settings.customAccent = accentColor.value;
   saveSettings();
   applyTheme();
