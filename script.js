@@ -489,6 +489,7 @@ const optShowAo100 = document.getElementById("opt-show-ao100");
 const settingsClose = document.getElementById("settings-close");
 const dataExportBtn = document.getElementById("data-export");
 const dataImportBtn = document.getElementById("data-import");
+const dataMergeBtn = document.getElementById("data-merge");
 const dataImportInput = document.getElementById("data-import-input");
 const dataStatus = document.getElementById("data-status");
 const puzzleSelect = document.getElementById("puzzle-select");
@@ -636,7 +637,8 @@ function exportData() {
   showDataStatus(`Backup downloaded — ${total} solve${total === 1 ? "" : "s"}.`);
 }
 
-function importAndMerge(file) {
+// Parse + validate a backup file, then hand the sessions object to `onData`.
+function readBackupFile(file, onData) {
   const reader = new FileReader();
   reader.onload = () => {
     let parsed;
@@ -651,6 +653,14 @@ function importAndMerge(file) {
       showDataStatus("That doesn't look like a cube-timer backup.", true);
       return;
     }
+    onData(incoming);
+  };
+  reader.onerror = () => showDataStatus("Couldn't read that file.", true);
+  reader.readAsText(file);
+}
+
+function importAndMerge(file) {
+  readBackupFile(file, (incoming) => {
     let added;
     try {
       added = mergeData(allData, incoming);
@@ -667,9 +677,26 @@ function importAndMerge(file) {
         ? `Merged — added ${added} new solve${added === 1 ? "" : "s"}.`
         : "Already up to date — nothing new to add."
     );
-  };
-  reader.onerror = () => showDataStatus("Couldn't read that file.", true);
-  reader.readAsText(file);
+  });
+}
+
+// Replace ALL data on this device with the backup (destructive — confirm first).
+function importReplace(file) {
+  readBackupFile(file, (incoming) => {
+    migrateSessionsShape(incoming);
+    const count = totalSolveCount(incoming);
+    const ok = window.confirm(
+      `Replace ALL data on this device with this backup (${count} solve${count === 1 ? "" : "s"})?\n\n` +
+      "Your current solves on this device will be overwritten. This can't be undone."
+    );
+    if (!ok) { showDataStatus("Import cancelled — nothing changed."); return; }
+    allData = incoming;
+    syncSolves();
+    saveData();
+    renderSessions();
+    render();
+    showDataStatus(`Imported — this device now has ${count} solve${count === 1 ? "" : "s"}.`);
+  });
 }
 
 let dataStatusTimer = null;
@@ -1160,12 +1187,14 @@ sessionNewBtn.addEventListener("click", () => { createSession(); sessionNewBtn.b
 sessionRenameBtn.addEventListener("click", () => { renameSession(); sessionRenameBtn.blur(); });
 sessionDeleteBtn.addEventListener("click", () => { deleteSession(); sessionDeleteBtn.blur(); });
 
-// Data backup: export a JSON file, or import & merge another device's file.
+// Data backup: export a JSON file, or import (replace) / merge another device's.
+let pendingImportMode = "merge";
 dataExportBtn.addEventListener("click", exportData);
-dataImportBtn.addEventListener("click", () => dataImportInput.click());
+dataImportBtn.addEventListener("click", () => { pendingImportMode = "replace"; dataImportInput.click(); });
+dataMergeBtn.addEventListener("click", () => { pendingImportMode = "merge"; dataImportInput.click(); });
 dataImportInput.addEventListener("change", () => {
   const file = dataImportInput.files && dataImportInput.files[0];
-  if (file) importAndMerge(file);
+  if (file) (pendingImportMode === "replace" ? importReplace : importAndMerge)(file);
   dataImportInput.value = ""; // allow re-importing the same file
 });
 
