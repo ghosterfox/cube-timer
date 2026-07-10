@@ -355,85 +355,172 @@ body {
   background: rgba(255, 92, 92, 0.08);
 }
 
+/* Best-average strip above the solve list — stacked tiles matching the bottom dock */
+.pb-averages {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5px; /* black seams between tiles, like the bottom stat grid */
+  margin: 1.05rem 0.9rem 0.9rem;
+  background: #0d0b12;
+}
+
+/* Solve area — same tile material as the PB strip / bottom dock */
+.solve-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin: 0 0.9rem 1rem;
+  background: linear-gradient(180deg, var(--card-2), var(--card));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.pb-avg {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.85rem;
+  background: linear-gradient(180deg, var(--card-2), var(--card));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.pb-avg-label {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pb-avg-value {
+  font-weight: 800;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+/* csTimer-style grid: #  |  time  |  ao5  |  ao12 */
+.solve-cols,
+.solve-item {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr 1fr 1fr;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.solve-cols {
+  padding: 0.5rem 0.7rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.solve-cols span { text-align: right; }
+.solve-cols span:first-child { text-align: left; }
+
 .solve-list {
   list-style: none;
   overflow-y: auto;
   flex: 1;
-  padding: 0.5rem;
+  min-height: 0;
+  padding: 0.3rem 0.3rem;
+  scrollbar-width: none; /* Firefox */
 }
 
+.solve-list::-webkit-scrollbar { width: 0; height: 0; } /* WebKit */
+
 .solve-item {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 10px;
+  padding: 0.22rem 0.4rem;
+  border-radius: 6px;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
   transition: background 0.14s ease;
 }
 
 .solve-item:hover {
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .solve-index {
   color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-  width: 2rem;
-  flex-shrink: 0;
-}
-
-.solve-time {
-  font-weight: 800;
-  font-size: 1rem;
-  flex: 1;
-}
-
-.solve-time.dnf {
-  color: var(--muted);
-}
-
-.solve-actions {
-  display: flex;
-  gap: 0.25rem;
-}
-
-.solve-actions button {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  border-radius: 7px;
-  padding: 0.12rem 0.4rem;
   font-size: 0.68rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.solve-single {
+  font-weight: 800;
+  font-size: 0.86rem;
+  text-align: right;
+}
+
+.solve-single.best { color: var(--ready); }
+.solve-single.dnf { color: var(--muted); }
+
+.solve-ao {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.solve-ao.best { color: var(--ready); }
+
+/* ---------- Solve popup: ao subtitle + +2 / DNF / delete ---------- */
+.modal-sub {
+  margin-top: -0.4rem;
+  margin-bottom: 0.9rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+}
+
+.modal-action {
+  flex: 1;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 10px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem;
   font-weight: 800;
   font-family: inherit;
-  line-height: 1.4;
   cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
 }
 
-.solve-actions button:hover {
+.modal-action:hover {
   border-color: var(--border-strong);
-  color: var(--fg);
-  transform: translateY(-1px);
+  background: var(--card-2);
 }
 
-.solve-actions button.pen.active {
+.modal-action.pen.active {
   border-color: var(--warn);
   color: var(--warn);
-  background: rgba(255, 176, 32, 0.1);
+  background: rgba(255, 176, 32, 0.12);
 }
 
-.solve-actions button.dnf.active {
+.modal-action.dnf.active {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: rgba(255, 92, 92, 0.12);
+}
+
+.modal-action.del:hover {
   border-color: var(--danger);
   color: var(--danger);
   background: rgba(255, 92, 92, 0.1);
-}
-
-.solve-actions button.del:hover {
-  border-color: var(--danger);
-  color: var(--danger);
 }
 
 .solve-empty {
@@ -543,6 +630,10 @@ body {
   letter-spacing: 0.02em;
   color: var(--fg);
   transition: color 0.12s ease;
+}
+
+.timer.holding {
+  color: var(--danger);
 }
 
 .timer.ready {
@@ -786,42 +877,45 @@ kbd {
 }
 
 .stat-pb {
-  flex: 1.5;
-  gap: 0.6rem;
+  flex: 1;
+  gap: 0.5rem;
 }
 
 .stat-grid {
-  flex: 2;
+  flex: 2.4;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: 1fr;
   gap: 1.5px;
   background: #0d0b12;
 }
 
+.stat-grid .card-mo3,
 .stat-grid .card-ao50,
 .stat-grid .card-ao100 {
   display: none;
 }
 
-.stat-grid.show-ao50 .card-ao50 {
-  display: flex;
-}
-
+.stat-grid.show-mo3 .card-mo3,
+.stat-grid.show-ao50 .card-ao50,
 .stat-grid.show-ao100 .card-ao100 {
   display: flex;
 }
 
-.stat-grid[data-cols="3"] {
-  grid-template-columns: repeat(3, 1fr);
+.stat-grid[data-cols="2"] {
+  grid-template-columns: repeat(2, 1fr);
 }
 
 .stat-grid[data-cols="4"] {
   grid-template-columns: repeat(4, 1fr);
 }
 
-.stat-grid[data-cols="3"] .stat-label,
-.stat-grid[data-cols="4"] .stat-label {
+.stat-grid[data-cols="5"] {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.stat-grid[data-cols="4"] .stat-label,
+.stat-grid[data-cols="5"] .stat-label {
   font-size: 0.6rem;
   letter-spacing: 0.05em;
   white-space: nowrap;
@@ -847,7 +941,7 @@ kbd {
 }
 
 .stat-pb .stat-value {
-  font-size: clamp(2.2rem, 4.6vw, 3.8rem);
+  font-size: clamp(1.5rem, 2.8vw, 2.4rem);
   color: var(--ready);
 }
 
@@ -927,18 +1021,6 @@ kbd {
 
 .modal-preview:empty {
   display: none;
-}
-
-/* Clickable affordances */
-.solve-main {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex: 1;
-  cursor: pointer;
-  border-radius: 8px;
-  padding: 0.15rem 0.3rem;
-  margin: -0.15rem -0.3rem;
 }
 
 /* ---------- Confetti (new PB celebration) ---------- */

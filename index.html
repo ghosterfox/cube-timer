@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=22" />
+  <link rel="stylesheet" href="style.css?v=23" />
 </head>
 <body>
   <!-- Stats page link -->
@@ -51,6 +51,11 @@
 
       <div class="opt-group">
         <span class="opt-group-label">Statistics</span>
+        <label class="opt">
+          <span>Show mo3</span>
+          <input type="checkbox" id="opt-show-mo3" />
+          <span class="switch"></span>
+        </label>
         <label class="opt">
           <span>Show Ao50</span>
           <input type="checkbox" id="opt-show-ao50" />
@@ -97,8 +102,18 @@
         <button class="clear-all" id="clear-all" type="button">Clear</button>
       </div>
     </div>
-    <ul class="solve-list" id="solve-list"></ul>
-    <p class="solve-empty" id="solve-empty">No solves yet</p>
+    <div class="pb-averages" id="pb-averages">
+      <div class="pb-avg" id="pb-avg-mo3"><span class="pb-avg-label">PB mo3</span><span class="pb-avg-value" id="pb-mo3">—</span></div>
+      <div class="pb-avg"><span class="pb-avg-label">PB ao5</span><span class="pb-avg-value" id="pb-ao5">—</span></div>
+      <div class="pb-avg"><span class="pb-avg-label">PB ao12</span><span class="pb-avg-value" id="pb-ao12">—</span></div>
+    </div>
+    <div class="solve-panel">
+      <div class="solve-cols" id="solve-cols" aria-hidden="true">
+        <span>#</span><span>time</span><span>ao5</span><span>ao12</span>
+      </div>
+      <ul class="solve-list" id="solve-list"></ul>
+      <p class="solve-empty" id="solve-empty">No solves yet</p>
+    </div>
   </aside>
 
   <div class="main-col">
@@ -133,6 +148,10 @@
           <span class="stat-value" id="stat-best">—</span>
         </div>
         <div class="stat-grid" id="stat-grid">
+          <div class="stat card-mo3" style="--outline: var(--c-U)">
+            <span class="stat-label">mo3</span>
+            <span class="stat-value" id="stat-mo3">—</span>
+          </div>
           <div class="stat" style="--outline: var(--c-B)">
             <span class="stat-label">ao5</span>
             <span class="stat-value" id="stat-ao5">—</span>
@@ -149,22 +168,6 @@
             <span class="stat-label">ao100</span>
             <span class="stat-value" id="stat-ao100">—</span>
           </div>
-          <div class="stat" style="--outline: var(--c-B)">
-            <span class="stat-label">PB ao5</span>
-            <span class="stat-value" id="stat-pb-ao5">—</span>
-          </div>
-          <div class="stat" style="--outline: var(--c-L)">
-            <span class="stat-label">PB ao12</span>
-            <span class="stat-value" id="stat-pb-ao12">—</span>
-          </div>
-          <div class="stat card-ao50" style="--outline: var(--c-D)">
-            <span class="stat-label">PB ao50</span>
-            <span class="stat-value" id="stat-pb-ao50">—</span>
-          </div>
-          <div class="stat card-ao100" style="--outline: var(--c-R)">
-            <span class="stat-label">PB ao100</span>
-            <span class="stat-value" id="stat-pb-ao100">—</span>
-          </div>
         </div>
       </section>
     </footer>
@@ -175,11 +178,13 @@
     <div class="modal" role="dialog" aria-modal="true">
       <button class="modal-close" id="modal-close" type="button" aria-label="Close">×</button>
       <h3 class="modal-title" id="modal-title"></h3>
+      <div class="modal-sub" id="modal-sub" hidden></div>
+      <div class="modal-actions" id="modal-actions" hidden></div>
       <div class="modal-scramble" id="modal-scramble"></div>
       <div class="modal-preview" id="modal-preview"></div>
     </div>
   </div>
 
-  <script src="script.js?v=20"></script>
+  <script src="script.js?v=21"></script>
 </body>
 </html>

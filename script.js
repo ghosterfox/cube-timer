@@ -466,14 +466,18 @@ const newScrambleBtn = document.getElementById("new-scramble");
 const bestEl = document.getElementById("stat-best");
 const ao5El = document.getElementById("stat-ao5");
 const ao12El = document.getElementById("stat-ao12");
-const pbAo5El = document.getElementById("stat-pb-ao5");
-const pbAo12El = document.getElementById("stat-pb-ao12");
+const mo3El = document.getElementById("stat-mo3");
 const ao50El = document.getElementById("stat-ao50");
 const ao100El = document.getElementById("stat-ao100");
-const pbAo50El = document.getElementById("stat-pb-ao50");
-const pbAo100El = document.getElementById("stat-pb-ao100");
 const statGrid = document.getElementById("stat-grid");
+const pbMo3El = document.getElementById("pb-mo3");
+const pbAo5El = document.getElementById("pb-ao5");
+const pbAo12El = document.getElementById("pb-ao12");
+const pbAveragesEl = document.getElementById("pb-averages");
+const pbAvgMo3El = document.getElementById("pb-avg-mo3");
+const optShowMo3 = document.getElementById("opt-show-mo3");
 const solveListEl = document.getElementById("solve-list");
+const solveColsEl = document.getElementById("solve-cols");
 const solveEmptyEl = document.getElementById("solve-empty");
 const sidebarCountEl = document.getElementById("sidebar-count");
 const clearAllBtn = document.getElementById("clear-all");
@@ -499,6 +503,8 @@ const sessionRenameBtn = document.getElementById("session-rename");
 const sessionDeleteBtn = document.getElementById("session-delete");
 const scrambleModal = document.getElementById("scramble-modal");
 const modalTitle = document.getElementById("modal-title");
+const modalSub = document.getElementById("modal-sub");
+const modalActions = document.getElementById("modal-actions");
 const modalScramble = document.getElementById("modal-scramble");
 const modalPreview = document.getElementById("modal-preview");
 const modalClose = document.getElementById("modal-close");
@@ -506,17 +512,20 @@ const dockPreview = document.querySelector(".dock-preview");
 
 // ---------- State ----------
 // "idle"    -> waiting to start
-// "ready"   -> space held down, timer armed (green)
+// "holding" -> space pressed, charging the hold delay (red, not armed yet)
+// "ready"   -> held long enough, timer armed (green)
 // "running" -> timer counting
-const STATE = { IDLE: "idle", READY: "ready", RUNNING: "running" };
+const STATE = { IDLE: "idle", HOLDING: "holding", READY: "ready", RUNNING: "running" };
 let state = STATE.IDLE;
 let startTime = 0;
 let rafId = null;
 let currentScramble = "";
+let holdTimeout = null;
+const HOLD_MS = 500; // must hold Space this long before the timer arms
 
 // ---------- Settings ----------
 const SETTINGS_KEY = "cube-timer-settings";
-const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showAo50: false, showAo100: false, manualEntry: false };
+const DEFAULT_SETTINGS = { hideUI: true, hideTimer: false, showMo3: true, showAo50: false, showAo100: false, manualEntry: false };
 let settings = loadSettings();
 
 function loadSettings() {
@@ -848,12 +857,60 @@ function newScramble() {
     `<div class="no-preview">No preview yet<span>${currentPuzzle.name} — scramble only</span></div>`;
 }
 
-// ---------- Scramble modal ----------
+// ---------- Scramble / solve modal ----------
+// Plain scramble view (e.g. enlarging the dock preview) — no solve actions.
 function openScrambleModal(title, text) {
   modalTitle.textContent = title;
+  modalSub.hidden = true;
+  modalActions.hidden = true;
+  modalActions.innerHTML = "";
   modalScramble.innerHTML = scrambleToHTML(text);
   modalPreview.innerHTML = previewForScramble(text, currentPuzzle) || "";
   scrambleModal.hidden = false;
+}
+
+// Solve popup — scramble + ao context + +2 / DNF / delete controls.
+function openSolveModal(index) {
+  const solve = solves[index];
+  if (!solve) return;
+  fillSolveModal(index);
+  modalScramble.innerHTML = scrambleToHTML(solve.scramble);
+  modalPreview.innerHTML = previewForScramble(solve.scramble, currentPuzzle) || "";
+  scrambleModal.hidden = false;
+}
+
+// (Re)fill the title, ao subtitle, and action buttons for a solve popup.
+function fillSolveModal(index) {
+  const solve = solves[index];
+  if (!solve) { closeScrambleModal(); return; }
+  modalTitle.textContent = `Solve ${index + 1} — ${formatSolve(solve)}`;
+
+  const ao5 = index >= 4 ? averageOfWindow(solves.slice(index - 4, index + 1)) : null;
+  const ao12 = index >= 11 ? averageOfWindow(solves.slice(index - 11, index + 1)) : null;
+  const mo3 = index >= 2 ? meanOfWindow(solves.slice(index - 2, index + 1)) : null;
+  modalSub.textContent =
+    `mo3 ${formatAverage(mo3)}  ·  ao5 ${formatAverage(ao5)}  ·  ao12 ${formatAverage(ao12)}`;
+  modalSub.hidden = false;
+
+  const mk = (cls, label, title, fn) => {
+    const b = document.createElement("button");
+    b.className = "modal-action " + cls;
+    b.type = "button";
+    b.textContent = label;
+    b.title = title;
+    b.addEventListener("click", fn);
+    return b;
+  };
+  modalActions.innerHTML = "";
+  modalActions.append(
+    mk("pen" + (solve.penalty === "+2" ? " active" : ""), "+2", "Toggle +2 penalty",
+      () => { togglePenalty(index, "+2"); fillSolveModal(index); }),
+    mk("dnf" + (solve.penalty === "DNF" ? " active" : ""), "DNF", "Toggle DNF",
+      () => { togglePenalty(index, "DNF"); fillSolveModal(index); }),
+    mk("del", "Delete", "Delete solve",
+      () => { deleteSolve(index); closeScrambleModal(); })
+  );
+  modalActions.hidden = false;
 }
 
 function closeScrambleModal() {
@@ -893,6 +950,36 @@ function stopTimer() {
   hintEl.textContent = "Press and hold Space to get ready";
   recordSolve(elapsed);
   newScramble();
+}
+
+// Space pressed: start charging the hold delay (red) — not armed yet.
+function beginHold() {
+  state = STATE.HOLDING;
+  timerEl.classList.remove("ready");
+  timerEl.classList.add("holding");
+  timerEl.textContent = "0.00";
+  hintEl.textContent = "Keep holding…";
+  clearTimeout(holdTimeout);
+  holdTimeout = setTimeout(armTimer, HOLD_MS);
+}
+
+// Held long enough: arm the timer (green) and enter focus mode.
+function armTimer() {
+  if (state !== STATE.HOLDING) return;
+  state = STATE.READY;
+  timerEl.classList.remove("holding");
+  timerEl.classList.add("ready");
+  hintEl.textContent = "Release to start";
+  if (settings.hideUI) document.body.classList.add("solving");
+}
+
+// Released before arming: cancel, nothing starts.
+function cancelHold() {
+  clearTimeout(holdTimeout);
+  holdTimeout = null;
+  state = STATE.IDLE;
+  timerEl.classList.remove("holding");
+  hintEl.textContent = "Press and hold Space to get ready";
 }
 
 // ---------- Solves ----------
@@ -1005,10 +1092,23 @@ function averageOfWindow(windowSolves) {
   return sum / trimmed.length;
 }
 
+// Mean of n (mo3) — arithmetic mean, no trim; any DNF makes the whole mean a DNF.
+function meanOfWindow(windowSolves) {
+  const times = windowSolves.map(effectiveTime);
+  if (times.some((t) => t === Infinity)) return Infinity;
+  return times.reduce((a, b) => a + b, 0) / times.length;
+}
+
 // Current rolling average of the most recent n solves.
 function currentAverage(n) {
   if (solves.length < n) return null;
   return averageOfWindow(solves.slice(-n));
+}
+
+// Current rolling mean of the most recent n solves (mo3).
+function currentMean(n) {
+  if (solves.length < n) return null;
+  return meanOfWindow(solves.slice(-n));
 }
 
 // Best (lowest) average of n across every consecutive window in history.
@@ -1018,6 +1118,17 @@ function bestAverage(n) {
   for (let i = 0; i + n <= solves.length; i++) {
     const avg = averageOfWindow(solves.slice(i, i + n));
     if (avg < best) best = avg;
+  }
+  return best === Infinity ? Infinity : best;
+}
+
+// Best (lowest) mean of n (mo3) across every consecutive window in history.
+function bestMean(n) {
+  if (solves.length < n) return null;
+  let best = Infinity;
+  for (let i = 0; i + n <= solves.length; i++) {
+    const m = meanOfWindow(solves.slice(i, i + n));
+    if (m < best) best = m;
   }
   return best === Infinity ? Infinity : best;
 }
@@ -1033,76 +1144,60 @@ function renderStats() {
   const finished = solves.filter((s) => s.penalty !== "DNF").map(effectiveTime);
   bestEl.textContent = finished.length ? formatTime(Math.min(...finished)) : "—";
 
+  mo3El.textContent = formatAverage(currentMean(3));
   ao5El.textContent = formatAverage(currentAverage(5));
   ao12El.textContent = formatAverage(currentAverage(12));
-  pbAo5El.textContent = formatAverage(bestAverage(5));
-  pbAo12El.textContent = formatAverage(bestAverage(12));
   ao50El.textContent = formatAverage(currentAverage(50));
   ao100El.textContent = formatAverage(currentAverage(100));
-  pbAo50El.textContent = formatAverage(bestAverage(50));
-  pbAo100El.textContent = formatAverage(bestAverage(100));
+
+  // Best-average strip above the solve list.
+  pbMo3El.textContent = formatAverage(bestMean(3));
+  pbAo5El.textContent = formatAverage(bestAverage(5));
+  pbAo12El.textContent = formatAverage(bestAverage(12));
+  pbAveragesEl.style.display = solves.length ? "grid" : "none";
 }
 
 function renderSolveList() {
   sidebarCountEl.textContent = solves.length;
   solveEmptyEl.style.display = solves.length === 0 ? "block" : "none";
+  if (solveColsEl) solveColsEl.style.display = solves.length === 0 ? "none" : "grid";
   solveListEl.innerHTML = "";
 
   const finished = solves.filter((s) => s.penalty !== "DNF").map(effectiveTime);
   const bestTime = finished.length ? Math.min(...finished) : null;
 
+  // Rolling ao5 / ao12 *ending at* each solve, so the list shows their progression.
+  const ao5s = solves.map((_, i) => (i >= 4 ? averageOfWindow(solves.slice(i - 4, i + 1)) : null));
+  const ao12s = solves.map((_, i) => (i >= 11 ? averageOfWindow(solves.slice(i - 11, i + 1)) : null));
+  const bestAo5 = bestAverage(5);
+  const bestAo12 = bestAverage(12);
+  const isBest = (v, best) => v != null && isFinite(v) && best != null && isFinite(best) && v === best;
+
   solves.forEach((solve, index) => {
     const li = document.createElement("li");
     li.className = "solve-item";
-    li.title = solve.scramble;
+    li.title = "View / edit solve";
+    li.addEventListener("click", () => openSolveModal(index));
 
     const num = document.createElement("span");
     num.className = "solve-index";
-    num.textContent = `${index + 1}.`;
+    num.textContent = index + 1;
 
     const time = document.createElement("span");
-    time.className = "solve-time";
+    time.className = "solve-single";
     time.textContent = formatSolve(solve);
     if (solve.penalty === "DNF") time.classList.add("dnf");
-    else if (bestTime !== null && effectiveTime(solve) === bestTime) {
-      time.style.color = "var(--ready)";
-    }
+    else if (bestTime !== null && effectiveTime(solve) === bestTime) time.classList.add("best");
 
-    // Clicking the number/time opens the solve's scramble.
-    const main = document.createElement("div");
-    main.className = "solve-main";
-    main.title = "View scramble";
-    main.append(num, time);
-    main.addEventListener("click", () =>
-      openScrambleModal(`Solve ${index + 1} — ${formatSolve(solve)}`, solve.scramble)
-    );
+    const ao5 = document.createElement("span");
+    ao5.className = "solve-ao" + (isBest(ao5s[index], bestAo5) ? " best" : "");
+    ao5.textContent = formatAverage(ao5s[index]);
 
-    const actions = document.createElement("div");
-    actions.className = "solve-actions";
+    const ao12 = document.createElement("span");
+    ao12.className = "solve-ao" + (isBest(ao12s[index], bestAo12) ? " best" : "");
+    ao12.textContent = formatAverage(ao12s[index]);
 
-    const plus2 = document.createElement("button");
-    plus2.className = "pen" + (solve.penalty === "+2" ? " active" : "");
-    plus2.type = "button";
-    plus2.textContent = "+2";
-    plus2.title = "Toggle +2 penalty";
-    plus2.addEventListener("click", () => togglePenalty(index, "+2"));
-
-    const dnf = document.createElement("button");
-    dnf.className = "dnf" + (solve.penalty === "DNF" ? " active" : "");
-    dnf.type = "button";
-    dnf.textContent = "DNF";
-    dnf.title = "Toggle DNF";
-    dnf.addEventListener("click", () => togglePenalty(index, "DNF"));
-
-    const del = document.createElement("button");
-    del.className = "del";
-    del.type = "button";
-    del.textContent = "×";
-    del.title = "Delete solve";
-    del.addEventListener("click", () => deleteSolve(index));
-
-    actions.append(plus2, dnf, del);
-    li.append(main, actions);
+    li.append(num, time, ao5, ao12);
     solveListEl.prepend(li); // newest on top
   });
 }
@@ -1125,12 +1220,7 @@ document.addEventListener("keydown", (e) => {
   if (state === STATE.RUNNING) {
     stopTimer();
   } else if (state === STATE.IDLE) {
-    // Arm the timer: go green and enter focus mode.
-    state = STATE.READY;
-    timerEl.classList.add("ready");
-    timerEl.textContent = "0.00";
-    hintEl.textContent = "Release to start";
-    if (settings.hideUI) document.body.classList.add("solving");
+    beginHold();
   }
 });
 
@@ -1140,6 +1230,8 @@ document.addEventListener("keyup", (e) => {
 
   if (state === STATE.READY) {
     startTimer();
+  } else if (state === STATE.HOLDING) {
+    cancelHold(); // released too early — don't start
   }
 });
 
@@ -1201,9 +1293,11 @@ dataImportInput.addEventListener("change", () => {
 // ---------- Options menu (modal) ----------
 // Show/hide the Ao50 and Ao100 cards independently, and size the grid to fit.
 function applyStatCols() {
+  statGrid.classList.toggle("show-mo3", settings.showMo3);
   statGrid.classList.toggle("show-ao50", settings.showAo50);
   statGrid.classList.toggle("show-ao100", settings.showAo100);
-  const cols = 2 + (settings.showAo50 ? 1 : 0) + (settings.showAo100 ? 1 : 0);
+  if (pbAvgMo3El) pbAvgMo3El.style.display = settings.showMo3 ? "flex" : "none";
+  const cols = 2 + (settings.showMo3 ? 1 : 0) + (settings.showAo50 ? 1 : 0) + (settings.showAo100 ? 1 : 0);
   statGrid.dataset.cols = String(cols);
 }
 
@@ -1247,6 +1341,7 @@ manualInput.addEventListener("keydown", (e) => {
 optHideUI.checked = settings.hideUI;
 optHideTimer.checked = settings.hideTimer;
 optManual.checked = settings.manualEntry;
+optShowMo3.checked = settings.showMo3;
 optShowAo50.checked = settings.showAo50;
 optShowAo100.checked = settings.showAo100;
 applyStatCols();
@@ -1276,6 +1371,12 @@ optManual.addEventListener("change", () => {
   settings.manualEntry = optManual.checked;
   saveSettings();
   applyManualMode();
+});
+
+optShowMo3.addEventListener("change", () => {
+  settings.showMo3 = optShowMo3.checked;
+  saveSettings();
+  applyStatCols();
 });
 
 optShowAo50.addEventListener("change", () => {
