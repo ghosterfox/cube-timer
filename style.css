@@ -138,6 +138,51 @@ body {
   margin-bottom: 0.15rem;
 }
 
+/* Data (backup) controls */
+.data-row {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.55rem;
+}
+
+.data-btn {
+  flex: 1;
+  padding: 0.62rem 0.8rem;
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.data-btn:hover {
+  border-color: var(--border-strong);
+  background: var(--card-2);
+}
+
+.opt-note {
+  margin-top: 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.data-status {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ready);
+}
+
+.data-status.err {
+  color: var(--danger);
+}
+
 .opt {
   display: flex;
   align-items: center;

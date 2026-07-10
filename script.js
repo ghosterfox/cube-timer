@@ -487,6 +487,10 @@ const manualInput = document.getElementById("manual-input");
 const optShowAo50 = document.getElementById("opt-show-ao50");
 const optShowAo100 = document.getElementById("opt-show-ao100");
 const settingsClose = document.getElementById("settings-close");
+const dataExportBtn = document.getElementById("data-export");
+const dataImportBtn = document.getElementById("data-import");
+const dataImportInput = document.getElementById("data-import-input");
+const dataStatus = document.getElementById("data-status");
 const puzzleSelect = document.getElementById("puzzle-select");
 const sessionSelect = document.getElementById("session-select");
 const sessionNewBtn = document.getElementById("session-new");
@@ -543,16 +547,19 @@ let currentPuzzle = loadCurrentPuzzle();
 let solves = []; // points at the current session's solves array
 syncSolves();
 
+// Migrate the old one-session-per-puzzle shape ({ puzzleId: [solves] }) in place.
+function migrateSessionsShape(data) {
+  for (const pid of Object.keys(data)) {
+    if (Array.isArray(data[pid])) {
+      data[pid] = { active: "s1", list: [{ id: "s1", name: "Session 1", solves: data[pid] }] };
+    }
+  }
+  return data;
+}
+
 function loadData() {
   try {
-    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    // Migrate the old one-session-per-puzzle shape ({ puzzleId: [solves] }).
-    for (const pid of Object.keys(data)) {
-      if (Array.isArray(data[pid])) {
-        data[pid] = { active: "s1", list: [{ id: "s1", name: "Session 1", solves: data[pid] }] };
-      }
-    }
-    return data;
+    return migrateSessionsShape(JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"));
   } catch {
     return {};
   }
@@ -564,6 +571,115 @@ function saveData() {
   } catch {
     /* storage unavailable — session-only history */
   }
+}
+
+// ---------- Backup: export & merge-import ----------
+// Solves carry no id, so identity = timestamp + time + penalty + scramble.
+function solveSignature(s) {
+  return `${s.date || ""}|${s.time}|${s.penalty || ""}|${s.scramble || ""}`;
+}
+
+function totalSolveCount(data) {
+  return Object.values(data).reduce((n, pd) =>
+    n + ((pd && pd.list) || []).reduce((m, s) => m + (Array.isArray(s.solves) ? s.solves.length : 0), 0), 0);
+}
+
+// Merge `incoming` sessions data into `base` (no overwrite). Sessions match by id
+// (so the default "Session 1" combines across devices); solves dedupe by signature.
+// Returns the number of new solves added.
+function mergeData(base, incoming) {
+  migrateSessionsShape(incoming);
+  let added = 0;
+  for (const pid of Object.keys(incoming)) {
+    const inc = incoming[pid];
+    if (!inc || !Array.isArray(inc.list)) continue;
+    if (!base[pid] || !Array.isArray(base[pid].list)) {
+      base[pid] = inc;
+      added += (inc.list || []).reduce((n, s) => n + (Array.isArray(s.solves) ? s.solves.length : 0), 0);
+      continue;
+    }
+    for (const incSess of inc.list) {
+      const incomingSolves = Array.isArray(incSess.solves) ? incSess.solves : [];
+      const match = base[pid].list.find((s) => s.id === incSess.id);
+      if (!match) {
+        base[pid].list.push(incSess);
+        added += incomingSolves.length;
+        continue;
+      }
+      const seen = new Set(match.solves.map(solveSignature));
+      for (const sv of incomingSolves) {
+        const sig = solveSignature(sv);
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        match.solves.push(sv);
+        added++;
+      }
+      // Keep the merged history in chronological order.
+      match.solves.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    }
+  }
+  return added;
+}
+
+function exportData() {
+  const payload = { app: "cube-timer", version: 1, exportedAt: new Date().toISOString(), sessions: allData };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cube-timer-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  const total = totalSolveCount(allData);
+  showDataStatus(`Backup downloaded — ${total} solve${total === 1 ? "" : "s"}.`);
+}
+
+function importAndMerge(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(reader.result);
+    } catch {
+      showDataStatus("Couldn't read that file — is it a backup JSON?", true);
+      return;
+    }
+    const incoming = parsed && parsed.sessions ? parsed.sessions : parsed;
+    if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+      showDataStatus("That doesn't look like a cube-timer backup.", true);
+      return;
+    }
+    let added;
+    try {
+      added = mergeData(allData, incoming);
+    } catch {
+      showDataStatus("Couldn't merge that file.", true);
+      return;
+    }
+    saveData();
+    syncSolves();
+    renderSessions();
+    render();
+    showDataStatus(
+      added
+        ? `Merged — added ${added} new solve${added === 1 ? "" : "s"}.`
+        : "Already up to date — nothing new to add."
+    );
+  };
+  reader.onerror = () => showDataStatus("Couldn't read that file.", true);
+  reader.readAsText(file);
+}
+
+let dataStatusTimer = null;
+function showDataStatus(msg, isError) {
+  if (!dataStatus) return;
+  dataStatus.textContent = msg;
+  dataStatus.classList.toggle("err", !!isError);
+  dataStatus.hidden = false;
+  clearTimeout(dataStatusTimer);
+  dataStatusTimer = setTimeout(() => { dataStatus.hidden = true; }, 6000);
 }
 
 function newSessionId() {
@@ -1043,6 +1159,15 @@ sessionSelect.addEventListener("change", () => {
 sessionNewBtn.addEventListener("click", () => { createSession(); sessionNewBtn.blur(); });
 sessionRenameBtn.addEventListener("click", () => { renameSession(); sessionRenameBtn.blur(); });
 sessionDeleteBtn.addEventListener("click", () => { deleteSession(); sessionDeleteBtn.blur(); });
+
+// Data backup: export a JSON file, or import & merge another device's file.
+dataExportBtn.addEventListener("click", exportData);
+dataImportBtn.addEventListener("click", () => dataImportInput.click());
+dataImportInput.addEventListener("change", () => {
+  const file = dataImportInput.files && dataImportInput.files[0];
+  if (file) importAndMerge(file);
+  dataImportInput.value = ""; // allow re-importing the same file
+});
 
 // ---------- Options menu (modal) ----------
 // Show/hide the Ao50 and Ao100 cards independently, and size the grid to fit.

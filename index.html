@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=20" />
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body>
   <!-- Stats page link -->
@@ -61,6 +61,17 @@
           <input type="checkbox" id="opt-show-ao100" />
           <span class="switch"></span>
         </label>
+      </div>
+
+      <div class="opt-group">
+        <span class="opt-group-label">Data</span>
+        <div class="data-row">
+          <button class="data-btn" id="data-export" type="button">Export backup</button>
+          <button class="data-btn" id="data-import" type="button">Import &amp; merge</button>
+        </div>
+        <p class="opt-note">Merge adds solves from another device without overwriting — duplicates are skipped, so you can combine your laptop and PC times.</p>
+        <p class="data-status" id="data-status" hidden></p>
+        <input type="file" id="data-import-input" accept="application/json,.json" hidden />
       </div>
     </div>
   </div>
@@ -166,6 +177,6 @@
     </div>
   </div>
 
-  <script src="script.js?v=18"></script>
+  <script src="script.js?v=19"></script>
 </body>
 </html>
